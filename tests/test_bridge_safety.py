@@ -69,3 +69,21 @@ class BridgeSafetyTests(unittest.TestCase):
         bridge.stop()
         self.assertTrue(bridge.job_cancel.is_set())
         bridge.c.radio.play.assert_not_called()
+
+
+    def test_native_command_ack_wait_is_cancelled(self):
+        entered, finished = threading.Event(), threading.Event()
+        transport = LedTransport('mock')
+        async def pending(*_):
+            entered.set()
+            try: await asyncio.Event().wait()
+            finally: finished.set()
+        transport._command = pending
+        cancel = threading.Event(); errors = []
+        def run():
+            try: transport.command('send_text', cancel, 'mock')
+            except Cancelled: errors.append('cancelled')
+        worker = threading.Thread(target=run); worker.start()
+        self.assertTrue(entered.wait(1)); cancel.set(); worker.join(1)
+        self.assertFalse(worker.is_alive()); self.assertTrue(finished.is_set())
+        self.assertEqual(errors, ['cancelled'])
