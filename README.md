@@ -2,7 +2,7 @@
 
 <img src="assets/brand/banner.png" alt="KEVIN — 어떤 기기든 AI가 부를 수 있는 도구로" width="100%">
 
-### 어떤 기기든 AI가 부를 수 있는 도구로 바꿔 줍니다.<br>앱도, API도 없는 기기까지.
+### 기존 기기를 AI가 부를 수 있는 도구로.<br>현재 LED·라디오 실물, 다른 기기는 가상 검증 중인 프로토타입입니다.
 
 [로드맵](ROADMAP.md) · [사업성](docs/BUSINESS.md) · [브랜드](docs/BRAND.md) · [기여 안내](CONTRIBUTING.md)
 
