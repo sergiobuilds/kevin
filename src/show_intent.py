@@ -96,7 +96,7 @@ _ON = re.compile(r"틀|켜|재생|play|on\b|들려", re.I)
 _SNOW = re.compile(r"눈|snow", re.I)
 _SKY = re.compile(r"하늘|배경|sky|background", re.I)
 _SPEED = re.compile(r"빨리|빠르|천천히|느리|느리게|속도|fast|slow|speed", re.I)
-_VOLUME = re.compile(r"소리|볼륨|음량|크게|작게|volume|louder|quieter", re.I)
+_VOLUME = re.compile(r"소리|볼륨|음량|크게|작게|조용|시끄|줄여|낮춰|키워|높여|volume|louder|quieter|quiet", re.I)
 
 
 def ground(prompt, spec, current):
@@ -140,6 +140,12 @@ def ground(prompt, spec, current):
         out["speed"] = None
     if not _VOLUME.search(text):
         out["volume"] = None
+    elif out["volume"] is None:  # the sentence clearly asks for quieter/louder
+        was = current.get("volume") or 45
+        if re.search(r"조용|작게|줄여|낮춰|quiet", text, re.I):
+            out["volume"] = max(10, round(was * 0.5))
+        elif re.search(r"크게|키워|높여|louder", text, re.I):
+            out["volume"] = min(100, round(was * 1.4))
     changed = any(out[k] != v for k, v in keep.items())
     if not changed:
         return dict(out, mode="unsupported", **keep,
