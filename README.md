@@ -146,6 +146,7 @@ OpenAI API의 `gpt-6-luna`가 같은 연출 계획을 만듭니다. 추가 Pytho
 
 `KEVIN_PLANNER=openai` 환경변수로도 선택할 수 있어 MCP의 `say`에도 적용됩니다.
 CLI의 `--planner`가 환경변수보다 우선하며, 키가 있다는 이유로 자동 전환하지 않습니다.
+이 선택은 터미널과 MCP `say`에 적용됩니다. 웹 브리지와 지킴이 모드는 각각 기존 모델 선택을 사용합니다.
 선택 설정은 `KEVIN_OPENAI_MODEL`(기본 `gpt-6-luna`),
 `KEVIN_OPENAI_TIMEOUT`(기본 30초, 최대 120초)입니다.
 모델 선택은 실물 실행 선택과 독립적입니다. `--live`와 기존 장비 설정은 그대로 필요합니다.
