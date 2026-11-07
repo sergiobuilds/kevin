@@ -8,3 +8,10 @@
 
 - 근거: [README 실물 기록](../README.md), [receipt.py](../src/receipt.py), [test_receipt.py](../tests/test_receipt.py), [실물 인수 절차](HACKATHON_DEMO.md).
 - 다음 검증: 고정 ROI에서 실제 성공, 명령 무시, 조명만 변화, 사람 가림을 분리해 반복 촬영하고 사람이 라벨한 목표 결과와 대조합니다. 표본 수·오탐/미탐·누락을 함께 공개해야 하며, 현재 정확도 수치는 제시하지 않습니다.
+
+## “연결이 끊겨도 정지를 믿을 수 있나요?”
+
+취소 토큰은 계획·경보·LED 대기 경로에 전달하고, 브라우저는 HTTP 오류를 정지 성공으로 표시하지 않습니다. 그러나 네트워크에서 이미 전송된 명령의 원격 실행을 되돌린다고 보장할 수 없습니다. 청소 시작 PUT의 응답이 불명확하면 후속 pause 응답만으로 정지 완료를 확정하지 않고 `prior_clean_outcome_unknown`을 남깁니다. 실물 안전을 인증하는 기능이 아닙니다.
+
+- 근거: [bridge 안전 회귀](../tests/test_bridge_safety.py), [vacuum 지연 PUT 회귀](../tests/test_device_vacuum.py), [브라우저 회귀](../tests/test_app_browser.cjs).
+- 다음 검증: 실제 기기에서 통신 단절·지연·재연결 후 상태를 확인하고 사용자가 직접 정지할 방법을 인수 절차에 포함합니다. [브리지 접근 허용](BRIDGE_ACCESS.md)은 사용자 인증과 별개입니다.
