@@ -20,6 +20,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # embedded Pythons ignore PYTHONPATH
+for _extra in os.environ.get('PYTHONPATH', '').split(os.pathsep):
+    if _extra and _extra not in sys.path:
+        sys.path.append(_extra)
 
 import guardian
 import show_intent
@@ -35,6 +38,68 @@ def _load_env_file():
 
 
 _load_env_file()
+
+
+class Eye:
+    """KEVIN's eye: the webcam on this machine, shared by every viewer of the web app."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.frame = None
+        self.error = None
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            import cv2
+        except Exception as exc:
+            self.error = 'opencv missing: ' + str(exc)[:60]
+            return
+        cap = None
+        while True:
+            if cap is None or not cap.isOpened():
+                cap = cv2.VideoCapture(int(os.getenv('KEVIN_CAMERA', '0')), getattr(cv2, 'CAP_DSHOW', 0))
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            ok, frame = cap.read()
+            if ok:
+                ok, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                with self.lock:
+                    self.frame, self.error = jpg.tobytes(), None
+            else:
+                self.error = 'camera returned no frame'
+                cap.release()
+                cap = None
+                time.sleep(1)
+            time.sleep(0.1)
+
+    def jpeg(self):
+        with self.lock:
+            return self.frame
+
+
+ELEVEN_VOICE = os.getenv('ELEVENLABS_VOICE_ID', '')
+_tts_cache = {}
+
+
+def tts(text: str) -> bytes | None:
+    key = os.getenv('ELEVENLABS_API_KEY', '').strip()
+    if not key or not text:
+        return None
+    if text in _tts_cache:
+        return _tts_cache[text]
+    voice = ELEVEN_VOICE or 'uyVNoMrnUku1dZyVEXwD'  # Anna Kim (ko)
+    body = {'text': text, 'model_id': os.getenv('ELEVENLABS_MODEL_ID', 'eleven_multilingual_v2'),
+            'voice_settings': {'stability': 0.45, 'similarity_boost': 0.8, 'style': 0.35, 'use_speaker_boost': True}}
+    req = urllib.request.Request(f'https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128',
+                                 json.dumps(body, ensure_ascii=False).encode(),
+                                 {'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg'})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        audio = r.read()
+    if len(_tts_cache) > 200:
+        _tts_cache.clear()
+    _tts_cache[text] = audio
+    return audio
 PORT = int(os.getenv('KEVIN_BRIDGE_PORT', '8787'))
 OPENAI_URL = 'https://api.openai.com/v1/responses'
 
@@ -99,9 +164,11 @@ class Bridge:
         self.c = controller
         self.lock = threading.Lock()
         self.alarm_until = 0
+        self.eye = Eye()
 
     def health(self):
-        return {'ok': True, 'live': self.c.live_configured,
+        return {'ok': True, 'live': self.c.live_configured, 'camera': self.eye.jpeg() is not None,
+                'camera_error': self.eye.error, 'voice': bool(os.getenv('ELEVENLABS_API_KEY', '').strip()),
                 'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()),
                 'led': bool(os.getenv('KEVIN_LED_ADDRESS')), 'radio': os.getenv('KEVIN_RADIO_DEVICE') or None}
 
@@ -136,7 +203,7 @@ class Bridge:
             return {'action': action, 'reply': why}
         if mode != 'away' or now < self.alarm_until:
             return {'action': 'none', 'reply': ''}
-        person, what = see_person(body.get('image', ''))
+        person, what = see_person(body.get('image') or base64.b64encode(self.eye.jpeg() or b'').decode())
         streak = int(body.get('streak', 0))
         if person is False:  # the camera moved, but nobody is there
             return {'action': 'none', 'reply': '', 'seen': what}
@@ -206,6 +273,18 @@ def make_handler(bridge):
         def do_GET(self):
             if self.path.startswith('/health'):
                 return self._send(200, bridge.health())
+            if self.path.startswith('/camera.jpg'):
+                data = bridge.eye.jpeg()
+                if not data:
+                    return self._send(503, {'error': bridge.eye.error or 'camera starting'})
+                self.send_response(200)
+                self.send_header('Content-Type', 'image/jpeg')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             if self.path.startswith('/state'):
                 s = bridge.c.get_state()
                 return self._send(200, {k: s.get(k) for k in ('status', 'message', 'recipe', 'transport', 'radio')})
@@ -218,6 +297,17 @@ def make_handler(bridge):
                 body = json.loads(self.rfile.read(min(n, 4_000_000)) or b'{}')
                 if self.path.startswith('/say'):
                     return self._send(200, bridge.say(str(body.get('text', ''))[:500]))
+                if self.path.startswith('/tts'):
+                    audio = tts(str(body.get('text', ''))[:300])
+                    if not audio:
+                        return self._send(503, {'error': 'voice unavailable'})
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'audio/mpeg')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Content-Length', str(len(audio)))
+                    self.end_headers()
+                    self.wfile.write(audio)
+                    return
                 if self.path.startswith('/stop'):
                     bridge.c.stop()
                     return self._send(200, {'reply': '알았어, 다 멈출게.'})

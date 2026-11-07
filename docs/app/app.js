@@ -7,7 +7,7 @@ const eye = $('eye'), ex = eye.getContext('2d', { willReadFrequently: true });
 const state = { mode: 'talk', view: 'room', talking: false, motion: 0, prev: null, streak: 0,
                 lastMotion: Date.now(), guardBusy: false, devicesOn: true, bridge: false };
 const IMG = {};
-for (const n of ['room', 'walker', 'portrait']) { IMG[n] = new Image(); IMG[n].src = 'assets/' + n + '.png'; }
+for (const [n, f] of [['room', 'room'], ['walker', 'kevin_walker'], ['portrait', 'kevin_portrait']]) { IMG[n] = new Image(); IMG[n].src = 'assets/' + f + '.png'; }
 
 // ---------- dialogue ----------
 let typing = null;
@@ -16,12 +16,25 @@ function say(text, { speak = true } = {}) {
   clearInterval(typing);
   const el = $('line'); el.textContent = ''; let i = 0;
   typing = setInterval(() => { el.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(typing); }, 35);
-  if (speak && 'speechSynthesis' in window) {
+  if (speak) speakOut(text.replace(/\([^)]*\)/g, '').trim());
+}
+let voiceAudio = null;
+async function speakOut(text) {
+  if (!text) return;
+  try {
+    if (voiceAudio) { voiceAudio.pause(); voiceAudio = null; }
+    const r = await fetch(BRIDGE + '/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    if (!r.ok) throw new Error('tts');
+    const url = URL.createObjectURL(await r.blob());
+    voiceAudio = new Audio(url);
+    voiceAudio.onplay = () => state.talking = true;
+    voiceAudio.onended = () => { state.talking = false; URL.revokeObjectURL(url); };
+    await voiceAudio.play();
+  } catch {
+    if (!('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/\([^)]*\)/g, ''));
-    u.lang = 'ko-KR'; u.rate = 1.05; u.pitch = 1.15;
-    const ko = speechSynthesis.getVoices().find(v => v.lang.startsWith('ko'));
-    if (ko) u.voice = ko;
+    const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; u.rate = 1.05; u.pitch = 1.3;
+    const ko = speechSynthesis.getVoices().find(v => v.lang.startsWith('ko')); if (ko) u.voice = ko;
     u.onstart = () => state.talking = true; u.onend = () => state.talking = false;
     speechSynthesis.speak(u);
   }
@@ -94,21 +107,37 @@ function setMode(m) {
 }
 
 // ---------- webcam: KEVIN's eye ----------
+const roomCam = new Image();
+let camSource = 'room';
 async function startCam() {
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
-    $('cam').srcObject = s; chip('chip-cam', 'ok'); $('eye-note').textContent = '보고 있어.';
-  } catch { chip('chip-cam', 'bad'); $('eye-note').textContent = '카메라 권한이 필요해요.'; }
+  roomCam.onload = () => { chip('chip-cam', 'ok', 'CAM·방'); };
+  roomCam.onerror = async () => {
+    if (camSource !== 'room') return;
+    camSource = 'browser';
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      $('cam').srcObject = s; chip('chip-cam', 'ok', 'CAM·이 기기'); $('eye-note').textContent = '이 기기 카메라로 보고 있어.';
+    } catch { chip('chip-cam', 'bad'); $('eye-note').textContent = '방 카메라가 꺼져 있어요.'; }
+  };
+  pullRoomCam();
 }
+function pullRoomCam() {
+  if (camSource !== 'room') return;
+  const next = new Image();
+  next.onload = () => { roomCam.src = next.src; setTimeout(pullRoomCam, 250); };
+  next.onerror = () => { roomCam.onerror(); };
+  next.src = BRIDGE + '/camera.jpg?t=' + Date.now();
+}
+function camReady() { return camSource === 'room' ? roomCam.complete && roomCam.naturalWidth > 0 : $('cam').readyState >= 2; }
+function camEl() { return camSource === 'room' ? roomCam : $('cam'); }
 function frameB64() {
   const c = document.createElement('canvas'); c.width = 320; c.height = 240;
-  c.getContext('2d').drawImage($('cam'), 0, 0, 320, 240);
+  c.getContext('2d').drawImage(camEl(), 0, 0, 320, 240);
   return c.toDataURL('image/jpeg', .7).split(',')[1];
 }
 async function watch() {
-  const v = $('cam');
-  if (v.readyState >= 2) {
-    ex.drawImage(v, 0, 0, 160, 120);
+  if (camReady()) {
+    ex.drawImage(camEl(), 0, 0, 160, 120);
     const d = ex.getImageData(0, 0, 160, 120).data;
     const g = new Uint8Array(160 * 120);
     for (let i = 0; i < g.length; i++) g[i] = (d[4 * i] + d[4 * i + 1] + d[4 * i + 2]) / 3;
@@ -117,7 +146,7 @@ async function watch() {
     state.prev = g; state.motion = changed / g.length;
     $('motion-bar').style.width = Math.min(100, state.motion * 600) + '%';
     // pixelate the eye view for the DOS look
-    ex.imageSmoothingEnabled = false; ex.drawImage(eye, 0, 0, 160, 120, 0, 0, 40, 30); ex.drawImage(eye, 0, 0, 40, 30, 0, 0, 160, 120);
+    ex.imageSmoothingEnabled = false; ex.drawImage(eye, 0, 0, 160, 120, 0, 0, 80, 60); ex.drawImage(eye, 0, 0, 80, 60, 0, 0, 160, 120);
     const moving = state.motion > .06;
     if (moving) state.lastMotion = Date.now();
     state.streak = moving ? state.streak + 1 : 0;
@@ -177,7 +206,7 @@ function draw(t) {
     npcThink(t);
     const step = npcMove(t);
     if (IMG.walker.complete) {
-      const h = 46, w = Math.round(h * IMG.walker.width / IMG.walker.height);
+      const h = 40, w = Math.round(h * IMG.walker.width / IMG.walker.height);
       const x = Math.round(npc.x - w / 2), y = Math.round(npc.y - h + 8 - step);
       sx.save();
       if (npc.face < 0) { sx.translate(x * 2 + w, 0); sx.scale(-1, 1); }
@@ -185,7 +214,7 @@ function draw(t) {
       sx.restore();
     }
   } else {
-    sx.fillStyle = state.mode === 'away' ? '#2a0610' : '#341a3a'; sx.fillRect(0, 0, 320, 200);
+    sx.fillStyle = state.mode === 'away' ? '#2a0610' : '#13305a'; sx.fillRect(0, 0, 320, 200);
     for (let y = 0; y < 200; y += 4) { sx.fillStyle = 'rgba(255,255,255,.025)'; sx.fillRect(0, y, 320, 1); }
     if (IMG.portrait.complete) {
       const h = 200, w = h * IMG.portrait.width / IMG.portrait.height;
@@ -211,5 +240,5 @@ document.addEventListener('keydown', (e) => {
 setInterval(() => { $('clock').textContent = new Date().toTimeString().slice(0, 5); }, 1000);
 setInterval(health, 5000);
 health(); startCam().then(watch); requestAnimationFrame(draw);
-say('안녕, 난 케빈이야. 말 걸어줘.', { speak: false });
+say('안녕, 난 케빈이야. 이 집은 내가 맡을게. 말 걸어줘.', { speak: false });
 $('text').focus();
