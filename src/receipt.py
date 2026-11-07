@@ -13,6 +13,7 @@ import base64
 import hashlib
 import io
 import json
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -33,31 +34,44 @@ class ReceiptError(ValueError):
 # ---------- camera ----------
 
 class Camera:
-    """Grab still frames from a local webcam with OpenCV (imported lazily)."""
+    """Keep one webcam open (opening takes seconds) and grab settled frames."""
 
     def __init__(self, index: int = 0, width: int = 1280, height: int = 720):
         self.index, self.width, self.height = index, width, height
+        self.cap = None
+        self.lock = threading.Lock()
 
-    def grab(self, warmup: int = 5) -> bytes:
+    def _open(self):
         try:
             import cv2
         except ImportError as exc:
             raise ReceiptError('opencv-python-headless is required for camera receipts') from exc
-        cap = cv2.VideoCapture(self.index, getattr(cv2, 'CAP_DSHOW', 0))
-        try:
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-            frame = None
-            for _ in range(max(1, warmup)):
-                ok, frame = cap.read()
-            if frame is None or not ok:
+        if self.cap is None or not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(self.index, getattr(cv2, 'CAP_DSHOW', 0))
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+            for _ in range(30):  # let auto-exposure settle once
+                self.cap.read()
+        return cv2
+
+    def grab(self, flush: int = 4) -> bytes:
+        with self.lock:
+            cv2 = self._open()
+            frame, ok = None, False
+            for _ in range(max(1, flush)):  # drop buffered stale frames
+                ok, frame = self.cap.read()
+            if not ok or frame is None:
                 raise ReceiptError('camera returned no frame')
             ok, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
             if not ok:
                 raise ReceiptError('could not encode camera frame')
             return jpg.tobytes()
-        finally:
-            cap.release()
+
+    def close(self):
+        with self.lock:
+            if self.cap is not None:
+                self.cap.release()
+                self.cap = None
 
 
 # ---------- observation ----------
