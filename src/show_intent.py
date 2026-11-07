@@ -154,8 +154,8 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
         raise IntentError("연출 요청은 1–2000자여야 합니다.")
     if current_recipe is not None and not isinstance(current_recipe, dict):
         raise IntentError("현재 연출은 객체여야 합니다.")
-    base = endpoint if endpoint is not None else os.getenv("TERMINATOR_OLLAMA_URL", "http://127.0.0.1:11434")
-    selected = model if model is not None else os.getenv("TERMINATOR_OLLAMA_MODEL", "qwen2.5:3b")
+    base = endpoint if endpoint is not None else os.getenv("KEVIN_OLLAMA_URL", "http://127.0.0.1:11434")
+    selected = model if model is not None else os.getenv("KEVIN_OLLAMA_MODEL", "qwen2.5:3b")
     if not isinstance(base, str) or not isinstance(selected, str) or not selected.strip():
         raise IntentError("Ollama 주소와 모델 설정을 확인하세요.")
     try:
@@ -165,7 +165,7 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
         url = base.rstrip("/")
         if not url.endswith("/api/chat"):
             url += "/api/chat"
-        timeout = float(os.getenv("TERMINATOR_OLLAMA_TIMEOUT", "180"))
+        timeout = float(os.getenv("KEVIN_OLLAMA_TIMEOUT", "180"))
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError()
         content = json.dumps({"prompt": prompt.strip(), "current_recipe": current_recipe}, ensure_ascii=False, allow_nan=False)

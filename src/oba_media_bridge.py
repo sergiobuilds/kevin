@@ -35,18 +35,18 @@ def import_media(source):
     with Path(source).open('rb') as stream:
         raw = stream.read(MAX_SOURCE_BYTES + 1)
     if len(raw) > MAX_SOURCE_BYTES:
-        raise pixels.PixelError('source exceeds the 4MB Terminator input limit')
+        raise pixels.PixelError('source exceeds the 4MB Kevin input limit')
     with Image.open(io.BytesIO(raw)) as image:
         if image.format not in ('PNG', 'GIF'):
             raise pixels.PixelError('only PNG and GIF are supported')
         if image.width * image.height > 4_000_000:
-            raise pixels.PixelError('source exceeds the 4MP Terminator input limit')
+            raise pixels.PixelError('source exceeds the 4MP Kevin input limit')
         if not 1 <= image.n_frames <= 32:
             raise pixels.PixelError('1–32 frames required; no frames are discarded')
         if image.format == 'PNG' and image.n_frames != 1:
             raise pixels.PixelError('animated PNG is unsupported; provide a GIF')
         if image.format == 'GIF' and image.info.get('loop') != 0:
-            raise pixels.PixelError('GIF must loop forever (loop=0) for terminator-scene v1')
+            raise pixels.PixelError('GIF must loop forever (loop=0) for kevin-scene v1')
         frames, durations = [], []
         for frame in ImageSequence.Iterator(image):
             if image.format == 'GIF':
@@ -56,7 +56,7 @@ def import_media(source):
                 durations.append(duration)
             frames.append(_frame_pixels(frame))
         if durations and len(set(durations)) != 1:
-            raise pixels.PixelError('variable frame timing cannot fit terminator-scene v1')
+            raise pixels.PixelError('variable frame timing cannot fit kevin-scene v1')
     return pixels.validate({'frames': frames, 'duration': durations[0] if durations else 200})
 
 
@@ -152,7 +152,7 @@ def export_bundle(scene, outdir, *, santa=False):
     preview_frames[0].save(
         preview, format='GIF', save_all=True, append_images=preview_frames[1:],
         duration=scene['duration'], loop=0, disposal=2)
-    project = {'format': 'terminator-scene', 'version': 1, 'scene': scene}
+    project = {'format': 'kevin-scene', 'version': 1, 'scene': scene}
     assets = {
         'project.json': (json.dumps(project, separators=(',', ':')) + '\n').encode('utf-8'),
         'santa.gif' if santa else 'display.gif': gif,
@@ -192,7 +192,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest='command', required=True)
     santa = sub.add_parser('santa', help='write a procedural animation and original WAV')
     santa.add_argument('outdir', type=Path)
-    importer = sub.add_parser('import', help='convert PNG/GIF into an editable Terminator bundle')
+    importer = sub.add_parser('import', help='convert PNG/GIF into an editable Kevin bundle')
     importer.add_argument('source', type=Path)
     importer.add_argument('outdir', type=Path)
     player = sub.add_parser('play-audio', help='explicitly play WAV on Windows default output')

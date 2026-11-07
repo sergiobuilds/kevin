@@ -34,13 +34,13 @@ def running_server():
 class TranscriptionTests(unittest.TestCase):
     def test_configured_requires_both_environment_values(self):
         for url, token, expected in (("", "", False), ("http://localhost", "", False), ("", "test-only", False), ("http://localhost", "test-only", True), (" ", " ", False)):
-            with patch.dict("os.environ", {"TERMINATOR_ASR_URL": url, "TERMINATOR_ASR_TOKEN": token}):
+            with patch.dict("os.environ", {"KEVIN_ASR_URL": url, "KEVIN_ASR_TOKEN": token}):
                 self.assertEqual(speech.configured(), expected)
 
     def test_proxy_sends_raw_bytes_and_bearer_to_real_http_helper(self):
         with running_server() as url, patch.object(helper, "recognize", return_value={"text": "  기차를 시작해 줘  ", "language": "ko"}) as recognize:
             # This test stubs inference only; the proxy and HTTP handling are real.
-            with patch.dict("os.environ", {"TERMINATOR_ASR_URL": url, "TERMINATOR_ASR_TOKEN": "test-only"}):
+            with patch.dict("os.environ", {"KEVIN_ASR_URL": url, "KEVIN_ASR_TOKEN": "test-only"}):
                 result = speech.transcribe(base64.b64encode(b"test webm").decode(), "audio/webm;codecs=opus")
             self.assertEqual(result, {"text": "기차를 시작해 줘", "language": "ko"})
             self.assertEqual(recognize.call_args.args[1], b"test webm")
@@ -56,7 +56,7 @@ class TranscriptionTests(unittest.TestCase):
                 with self.assertRaises(speech.TranscriptionError):
                     speech.transcribe(audio, mime, "http://localhost", "test-only")
                 call.assert_not_called()
-        with patch.dict("os.environ", {"TERMINATOR_ASR_URL": "", "TERMINATOR_ASR_TOKEN": ""}), patch("urllib.request.urlopen") as call:
+        with patch.dict("os.environ", {"KEVIN_ASR_URL": "", "KEVIN_ASR_TOKEN": ""}), patch("urllib.request.urlopen") as call:
             with self.assertRaises(speech.TranscriptionError):
                 speech.transcribe(valid, "audio/wav")
             call.assert_not_called()

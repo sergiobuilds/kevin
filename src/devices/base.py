@@ -1,4 +1,4 @@
-"""Contract every Terminator device adapter follows.
+"""Contract every Kevin device adapter follows.
 
 The language model never touches hardware. It produces a plan; the show
 controller validates it and hands each adapter only the fields it owns.

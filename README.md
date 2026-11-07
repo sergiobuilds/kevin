@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/brand/banner.png" alt="TERMINATOR — 버리지 마세요. 부리세요." width="100%">
+<img src="assets/brand/banner.png" alt="KEVIN — 버리지 마세요. 부리세요." width="100%">
 
 **말 한마디로 집 안의 옛날 기기를 부리는 터미널 속 AI**
 
@@ -18,7 +18,7 @@
 
 > **“크리스마스 분위기 내줘.”** 라고 말하면, 터미널 속 AI가 대답하고 **133cm LED 전광판**에 산타와 기차가 달리며 **오래된 블루투스 라디오**에서 캐럴이 흘러나옵니다.
 
-집에는 앱도, 클라우드도, API도 없는 물건이 가득합니다. 블루투스로만 말하는 전광판, 라디오, 리모컨 하나로 움직이는 장난감 기차가 그렇습니다. 스마트홈은 이런 물건을 버리고 새로 사라고 합니다. **Terminator는 반대로 갑니다.** AI가 기존 물건의 통신법을 쥐고, 사람의 말을 그 기기의 언어로 바꿔 직접 부립니다.
+집에는 앱도, 클라우드도, API도 없는 물건이 가득합니다. 블루투스로만 말하는 전광판, 라디오, 리모컨 하나로 움직이는 장난감 기차가 그렇습니다. 스마트홈은 이런 물건을 버리고 새로 사라고 합니다. **Kevin는 반대로 갑니다.** AI가 기존 물건의 통신법을 쥐고, 사람의 말을 그 기기의 언어로 바꿔 직접 부립니다.
 
 ## 시연 장면
 
@@ -39,7 +39,7 @@
 └──────────────────────────────────────────────────────────┘
 ```
 
-1. 터미널에서 `./terminator --live` 를 실행합니다. 90년대 PC 게임처럼 색이 있는 도트 화면에서 AI 캐릭터가 방을 걷습니다.
+1. 터미널에서 `./kevin --live` 를 실행합니다. 90년대 PC 게임처럼 색이 있는 도트 화면에서 AI 캐릭터가 방을 걷습니다.
 2. **Space**를 누르면 배경이 사라지고 캐릭터가 화면 가득 다가와 말을 기다립니다.
 3. 한국어로 말하거나(**Ctrl+V** 녹음) 입력합니다. 예: “기차 더 빨리”, “하늘을 보라색으로”, “음악은 꺼줘”.
 4. AI가 요청을 **허용된 동작의 계획**으로 바꾸고, 전광판과 라디오가 동시에 바뀝니다.
@@ -47,7 +47,7 @@
 
 ## 무엇이 다른가
 
-| | 기존 스마트홈 | Terminator |
+| | 기존 스마트홈 | Kevin |
 |---|---|---|
 | 대상 기기 | 회사 앱·클라우드에 등록된 신제품 | 이미 집에 있는 블루투스·적외선 기기 |
 | 연결 방식 | 제조사 클라우드 경유 | PC가 기기 통신법으로 **직접** 전송 |
@@ -94,7 +94,7 @@ Python 3.10 이상이 필요합니다.
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-./terminator            # 미리보기: 기기를 건드리지 않습니다
+./kevin            # 미리보기: 기기를 건드리지 않습니다
 ```
 
 실물 기기로 내보내려면 Windows에서 다음을 설정합니다.
@@ -102,17 +102,17 @@ python3 -m venv .venv
 ```powershell
 py -m venv .venv
 .venv\Scripts\pip install -r requirements-live.txt
-$env:TERMINATOR_LED_ADDRESS = "<전광판 BLE 주소>"
-$env:TERMINATOR_RADIO_DEVICE = "<블루투스 라디오 장치 이름>"
-$env:TERMINATOR_OLLAMA_MODEL = "qwen2.5:3b"   # 가벼운 모델 + 단어 보정
-.\terminator.cmd --live
+$env:KEVIN_LED_ADDRESS = "<전광판 BLE 주소>"
+$env:KEVIN_RADIO_DEVICE = "<블루투스 라디오 장치 이름>"
+$env:KEVIN_OLLAMA_MODEL = "qwen2.5:3b"   # 가벼운 모델 + 단어 보정
+.\kevin.cmd --live
 ```
 
 | 키 | 동작 |
 |---|---|
 | Space | 캐릭터에게 말 걸기 |
 | Enter | 요청 보내기 |
-| Ctrl+V | 음성 녹음 시작/끝 (`TERMINATOR_ASR_URL` 설정 시) |
+| Ctrl+V | 음성 녹음 시작/끝 (`KEVIN_ASR_URL` 설정 시) |
 | Ctrl+L | 미리보기 ↔ 실물 전환 |
 | Esc | 모든 기기 정지 |
 | Ctrl+C | 종료 |
@@ -156,7 +156,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 ## 왜 돈이 되는가
 
-헤이홈 같은 IR 허브가 누적 약 68만 대 팔릴 만큼, 옛날 기기를 스마트하게 쓰려는 수요는 이미 있습니다. 기존 제품은 기기마다 앱과 클라우드에 묶이고, Terminator는 여러 기기를 말 한마디로 묶어 직접 부립니다. 국내 가구의 1%가 월 4,900원을 내면 연 약 136억 원입니다. 가정과 출처는 [BUSINESS.md](docs/BUSINESS.md)에 있습니다.
+헤이홈 같은 IR 허브가 누적 약 68만 대 팔릴 만큼, 옛날 기기를 스마트하게 쓰려는 수요는 이미 있습니다. 기존 제품은 기기마다 앱과 클라우드에 묶이고, Kevin는 여러 기기를 말 한마디로 묶어 직접 부립니다. 국내 가구의 1%가 월 4,900원을 내면 연 약 136억 원입니다. 가정과 출처는 [BUSINESS.md](docs/BUSINESS.md)에 있습니다.
 
 ## 팀
 

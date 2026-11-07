@@ -26,8 +26,8 @@ DEFAULT_RECIPE = dict(preset='christmas_train', speed=1, snow='normal', sky=None
 
 def interpret(prompt, recipe, config):
     module = importlib.import_module('show_intent')
-    return module.interpret(prompt, recipe, endpoint=config.get('TERMINATOR_OLLAMA_URL'),
-                            model=config.get('TERMINATOR_OLLAMA_MODEL'))
+    return module.interpret(prompt, recipe, endpoint=config.get('KEVIN_OLLAMA_URL'),
+                            model=config.get('KEVIN_OLLAMA_MODEL'))
 
 
 def normalized_plan(plan):
@@ -83,10 +83,10 @@ class ShowController:
         self.planner = planner
         self.renderer = renderer or render_recipe
         self.transcriber = transcriber
-        self.transport = transport or LedTransport(self.config.get('TERMINATOR_LED_ADDRESS', ''))
-        self.data_dir = Path(self.config.get('TERMINATOR_SHOW_DATA_DIR') or
+        self.transport = transport or LedTransport(self.config.get('KEVIN_LED_ADDRESS', ''))
+        self.data_dir = Path(self.config.get('KEVIN_SHOW_DATA_DIR') or
                              Path(__file__).resolve().parent.parent / '.runtime')
-        self.radio = radio or RadioPlayer(self.config.get('TERMINATOR_RADIO_DEVICE', ''),
+        self.radio = radio or RadioPlayer(self.config.get('KEVIN_RADIO_DEVICE', ''),
                                           self.data_dir / 'jingle_bells.wav')
         self.cancel = threading.Event()
         self.cleanup_cancel = threading.Event()
@@ -100,17 +100,17 @@ class ShowController:
 
     @property
     def live_configured(self):
-        return (self.config.get('TERMINATOR_SHOW_LIVE') == '1' and
-                bool(self.config.get('TERMINATOR_LED_ADDRESS', '').strip()) and
-                self.config.get('TERMINATOR_RADIO_DEVICE') == 'CRF-35B')
+        return (self.config.get('KEVIN_SHOW_LIVE') == '1' and
+                bool(self.config.get('KEVIN_LED_ADDRESS', '').strip()) and
+                self.config.get('KEVIN_RADIO_DEVICE') == 'CRF-35B')
 
     def get_state(self):
         with self.lock:
             result = copy.deepcopy(self.state)
         result.update(live_configured=self.live_configured,
-                      voice_configured=bool(self.config.get('TERMINATOR_ASR_URL') and
-                                            self.config.get('TERMINATOR_ASR_TOKEN')),
-                      radio_device='CRF-35B' if self.config.get('TERMINATOR_RADIO_DEVICE') == 'CRF-35B' else None)
+                      voice_configured=bool(self.config.get('KEVIN_ASR_URL') and
+                                            self.config.get('KEVIN_ASR_TOKEN')),
+                      radio_device='CRF-35B' if self.config.get('KEVIN_RADIO_DEVICE') == 'CRF-35B' else None)
         # Read actual player state only after live playback was attempted.
         if result['radio']['status'] not in ('not_started', 'stopped', 'stopped_child_terminated'):
             result['radio'] = self.radio.status()
@@ -264,7 +264,7 @@ class ShowController:
                 pass
 
     def send_manual_scene(self, scene, address, confirmed):
-        if not self.live_configured or confirmed is not True or address != self.config.get('TERMINATOR_LED_ADDRESS'):
+        if not self.live_configured or confirmed is not True or address != self.config.get('KEVIN_LED_ADDRESS'):
             raise ShowError('manual live transfer requires the configured panel and explicit confirmation')
         scene = copy.deepcopy(pixels.validate(scene))
         with self.lock:
@@ -309,8 +309,8 @@ class ShowController:
             radio = {'status': 'stop_failed_unknown', 'audible_verified': False}
         with self.lock:
             self.state['radio'] = radio
-        if (self.config.get('TERMINATOR_SHOW_LIVE') == '1' and
-                self.config.get('TERMINATOR_LED_ADDRESS', '').strip() and not self.closed):
+        if (self.config.get('KEVIN_SHOW_LIVE') == '1' and
+                self.config.get('KEVIN_LED_ADDRESS', '').strip() and not self.closed):
             threading.Thread(target=self._clear, daemon=True).start()
         else:
             with self.lock:
@@ -352,8 +352,8 @@ class ShowController:
                 result = self.transcriber(audio, mime)
             else:
                 module = importlib.import_module('show_transcription')
-                result = module.transcribe(audio, mime, endpoint=self.config.get('TERMINATOR_ASR_URL'),
-                                           token=self.config.get('TERMINATOR_ASR_TOKEN'))
+                result = module.transcribe(audio, mime, endpoint=self.config.get('KEVIN_ASR_URL'),
+                                           token=self.config.get('KEVIN_ASR_TOKEN'))
             if not isinstance(result, dict) or not isinstance(result.get('text'), str) or not isinstance(result.get('language'), str):
                 raise ShowError('invalid transcription response')
             with self.lock:

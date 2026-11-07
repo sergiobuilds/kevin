@@ -19,7 +19,7 @@ def prepare(path):
     try:
         with Image.open(io.BytesIO(raw)) as image:
             if image.format not in ('PNG', 'GIF') or image.size != (144, 16):
-                raise TransferError('select a 144×16 PNG or GIF exported by Terminator')
+                raise TransferError('select a 144×16 PNG or GIF exported by Kevin')
             kind = image.format.lower()
         scene = pixels.import_image(base64.b64encode(raw).decode())
         return base64.b64decode(pixels.export_image(scene, kind)), kind, len(scene['frames'])
@@ -61,7 +61,7 @@ def send_scene(scene, mode='simulator', address=None, confirmed=False, client_fa
         except ImportError as exc:
             raise TransferError('선택 패키지 pypixelcolor==0.5.0 설치가 필요합니다') from exc
     try:
-        with tempfile.TemporaryDirectory(prefix='terminator-transfer-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='kevin-transfer-') as tmp:
             path = Path(tmp) / ('scene.' + kind)
             path.write_bytes(data)
             asyncio.run(transfer(address.strip(), path, client_factory))
@@ -87,7 +87,7 @@ def main(argv=None):
             from pypixelcolor import AsyncClient
         except ImportError as exc:
             raise TransferError('install optional pypixelcolor==0.5.0 first') from exc
-        with tempfile.TemporaryDirectory(prefix='terminator-transfer-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='kevin-transfer-') as tmp:
             path = Path(tmp) / ('scene.' + kind)
             path.write_bytes(data)
             asyncio.run(transfer(args.device, path, AsyncClient))

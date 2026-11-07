@@ -88,7 +88,7 @@ class ChristmasShowTests(unittest.TestCase):
 
     def test_bundle_exact_gif_project_and_enlarged_preview(self):
         project = json.loads((self.output / 'project.json').read_text())
-        self.assertEqual((project['format'], project['version']), ('terminator-scene', 1))
+        self.assertEqual((project['format'], project['version']), ('kevin-scene', 1))
         self.assertEqual(project['scene'], self.scene)
         adaptation = project['reference_adaptation']
         self.assertEqual(adaptation, self.result['reference_adaptation'])

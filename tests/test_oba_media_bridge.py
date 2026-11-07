@@ -56,7 +56,7 @@ class MediaBridgeTests(unittest.TestCase):
         output = self.root / 'santa'
         result = bridge.export_bundle(bridge.santa_scene(), output, santa=True)
         project = json.loads((output / 'project.json').read_text())
-        self.assertEqual((project['format'], project['version']), ('terminator-scene', 1))
+        self.assertEqual((project['format'], project['version']), ('kevin-scene', 1))
         scene = pixels.validate(project['scene'])
         self.assertEqual(scene, bridge.santa_scene())
         self.assertLess((output / 'project.json').stat().st_size, 2_000_000)

@@ -17,7 +17,7 @@ class TranscriptionError(ValueError):
 
 
 def configured():
-    return bool(os.getenv("TERMINATOR_ASR_URL", "").strip() and os.getenv("TERMINATOR_ASR_TOKEN", "").strip())
+    return bool(os.getenv("KEVIN_ASR_URL", "").strip() and os.getenv("KEVIN_ASR_TOKEN", "").strip())
 
 
 def transcribe(audio_b64, mime, endpoint=None, token=None):
@@ -32,8 +32,8 @@ def transcribe(audio_b64, mime, endpoint=None, token=None):
         raise TranscriptionError("음성 데이터가 비어 있거나 2MB 제한을 초과했습니다.")
     if not isinstance(mime, str) or len(mime) > 200 or "\r" in mime or "\n" in mime or mime.split(";", 1)[0].strip().lower() not in ALLOWED_MIMES:
         raise TranscriptionError("지원하지 않는 음성 형식입니다.")
-    url = endpoint if endpoint is not None else os.getenv("TERMINATOR_ASR_URL", "").strip()
-    secret = token if token is not None else os.getenv("TERMINATOR_ASR_TOKEN", "").strip()
+    url = endpoint if endpoint is not None else os.getenv("KEVIN_ASR_URL", "").strip()
+    secret = token if token is not None else os.getenv("KEVIN_ASR_TOKEN", "").strip()
     if not isinstance(url, str) or not isinstance(secret, str) or not url or not secret.strip() or any(c in secret for c in "\r\n"):
         raise TranscriptionError("음성 서버 주소와 인증 토큰을 설정하세요.")
     try:

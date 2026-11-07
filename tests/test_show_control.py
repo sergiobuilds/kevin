@@ -85,8 +85,8 @@ class ControllerTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.transport = FakeTransport()
         self.radio = FakeRadio()
-        self.config = dict(TERMINATOR_SHOW_LIVE='1', TERMINATOR_LED_ADDRESS='test-only-target',
-                           TERMINATOR_RADIO_DEVICE='CRF-35B', TERMINATOR_SHOW_DATA_DIR=self.temp.name)
+        self.config = dict(KEVIN_SHOW_LIVE='1', KEVIN_LED_ADDRESS='test-only-target',
+                           KEVIN_RADIO_DEVICE='CRF-35B', KEVIN_SHOW_DATA_DIR=self.temp.name)
 
     def controller(self, **kwargs):
         options = dict(planner=lambda *_: plan(), transport=self.transport,

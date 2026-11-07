@@ -34,7 +34,7 @@ class IntentTests(unittest.TestCase):
         self.assertEqual(json.loads(body["messages"][1]["content"])["current_recipe"], recipe)
 
     def test_environment_and_full_endpoint(self):
-        with patch.dict("os.environ", {"TERMINATOR_OLLAMA_URL": "http://localhost:7/api/chat", "TERMINATOR_OLLAMA_MODEL": "chosen", "TERMINATOR_OLLAMA_TIMEOUT": "12"}), patch("urllib.request.urlopen", return_value=response()) as call:
+        with patch.dict("os.environ", {"KEVIN_OLLAMA_URL": "http://localhost:7/api/chat", "KEVIN_OLLAMA_MODEL": "chosen", "KEVIN_OLLAMA_TIMEOUT": "12"}), patch("urllib.request.urlopen", return_value=response()) as call:
             show_intent.interpret("눈", {})
         self.assertEqual(call.call_args.args[0].full_url, "http://localhost:7/api/chat")
         self.assertEqual(json.loads(call.call_args.args[0].data)["model"], "chosen")

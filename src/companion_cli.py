@@ -83,7 +83,7 @@ class Backend:
     def __init__(self, live=False):
         from show_control import ShowController
         config = dict(os.environ)
-        config['TERMINATOR_SHOW_LIVE'] = '1' if live else '0'
+        config['KEVIN_SHOW_LIVE'] = '1' if live else '0'
         self.live = live
         self.local = ShowController(config=config)
 
@@ -284,7 +284,7 @@ class Game:
         graphic_rows = max(4, rows - 7)
         art = self.art.compose(self.mode, width, graphic_rows * 2, phase=phase, target=self.target)
         safe = lambda text: sanitize_terminal_text(text, width - 2)
-        lines = [safe('TERMINATOR  /  TERMINAL GAME     ' + ('LIVE · 실물 확인 별도' if self.live or self.executing_live else 'PREVIEW · 이번 요청')),
+        lines = [safe('KEVIN  /  HOME ALONE, BUT SMART     ' + ('LIVE · 실물 확인 별도' if self.live or self.executing_live else 'PREVIEW · 이번 요청')),
                  '+' + '-' * (width - 2) + '+', safe(self.message),
                  safe('> ' + self.prompt), safe('Space 대화 | Enter 요청 | Esc 정지 | Ctrl+V 음성 | Ctrl+L 실물 선택 | Ctrl+C 종료')]
         return '\x1b[H' + image_to_ansi(art) + '\x1b[0m' + ''.join(

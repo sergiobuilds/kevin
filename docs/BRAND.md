@@ -1,16 +1,16 @@
-# Brand — TERMINATOR
+# Brand — KEVIN
 
-<img src="../assets/brand/banner.png" alt="TERMINATOR 배너" width="100%">
+<img src="../assets/brand/banner.png" alt="KEVIN 배너" width="100%">
 
 ## 이름
 
-**TERMINATOR = TERMINAL + 끝내는 자.** 터미널 안에 사는 AI가, 앱이 없다는 이유로 버려질 운명인 옛날 기기들의 “단종”을 끝냅니다.
+**케빈(KEVIN)** — 영화 「나 홀로 집에」의 케빈처럼, 집 안에 있던 평범한 물건들을 엮어 혼자서 집 전체를 움직입니다. 케빈은 새 장비를 사지 않았습니다. 이미 집에 있던 것으로 해냈습니다. 터미널 속 AI 케빈도 같습니다.
 
 ## 한 줄
 
 - **버리지 마세요. 부리세요.**
 - Don't replace it. Command it.
-- 보조: *I'll be back — 당신의 옛날 기기도.*
+- 보조: *집은 케빈이 지킵니다. 이미 있는 물건으로.*
 
 ## 약속
 
@@ -30,7 +30,7 @@
 | 프롬프트 (도스 시안) | ![](https://img.shields.io/badge/-%20-2DE2E6) | `#2DE2E6` |
 | 캐릭터 배경 (미연시 보라) | ![](https://img.shields.io/badge/-%20-341A3A) | `#341A3A` |
 
-- 워드마크는 5×7 도트 글자 `TERMINATOR` 뒤에 빨간 블록 커서 ▌를 붙입니다.
+- 워드마크는 5×7 도트 글자 `KEVIN` 뒤에 빨간 블록 커서 ▌를 붙입니다.
 - 화면에는 가는 주사선(scanline)을 깔아 CRT 느낌을 냅니다.
 - 캐릭터는 굵은 선의 셀화풍 컬러 여성. 방을 서성이다 말을 걸면 배경이 사라지고 크게 다가옵니다.
 
@@ -42,7 +42,7 @@
 
 ## 시연 오프닝 (15초)
 
-> 화면이 꺼진 CRT처럼 검다. `C:\HOME> run terminator --live` 가 찍히고 빨간 커서가 깜빡인다.
+> 화면이 꺼진 CRT처럼 검다. `C:\HOME> run kevin --live` 가 찍히고 빨간 커서가 깜빡인다.
 > 방을 서성이던 캐릭터에게 말을 건다. “크리스마스로 만들어줘.”
 > 133cm 전광판에 산타가 날고, 낡은 라디오에서 캐럴이 흐른다.
 > **버리지 마세요. 부리세요.**
