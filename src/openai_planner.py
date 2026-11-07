@@ -25,6 +25,22 @@ def interpret(prompt, current_recipe, config):
         raise OpenAIPlanError("연출 요청은 1–2000자여야 합니다.")
     if current_recipe is not None and not isinstance(current_recipe, dict):
         raise OpenAIPlanError("현재 연출은 객체여야 합니다.")
+    try:
+        content = json.dumps({"prompt": prompt.strip(), "current_recipe": current_recipe},
+                             ensure_ascii=False, allow_nan=False)
+        if len(content) > 16000:
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise OpenAIPlanError("OpenAI 현재 연출 설정을 확인하세요.") from None
+    spec = request_json(SYSTEM, content, SCHEMA, config)
+    try:
+        return _validate(spec)
+    except IntentError:
+        raise OpenAIPlanError("OpenAI 계획이 허용된 연출 계약과 다릅니다. 실행하지 않았습니다.") from None
+
+
+def request_json(system, content, schema, config, max_tokens=1200):
+    """Structured inference only; setup probes cannot dispatch device actions."""
     key = config.get("OPENAI_API_KEY", "")
     model = config.get("KEVIN_OPENAI_MODEL", "gpt-6-luna")
     if not isinstance(key, str) or not key.strip() or any(ord(c) < 33 or ord(c) > 126 for c in key):
@@ -35,19 +51,18 @@ def interpret(prompt, current_recipe, config):
         timeout = float(config.get("KEVIN_OPENAI_TIMEOUT", "30"))
         if not math.isfinite(timeout) or not 0 < timeout <= 120:
             raise ValueError()
-        content = json.dumps({"prompt": prompt.strip(), "current_recipe": current_recipe},
-                             ensure_ascii=False, allow_nan=False)
-        if len(content) > 16000:
+        content = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, allow_nan=False)
+        if len(content) > 32000:
             raise ValueError()
     except (ValueError, TypeError):
         raise OpenAIPlanError("OpenAI 제한 시간 또는 현재 연출 설정을 확인하세요.") from None
     payload = {
         "model": model, "stream": False, "store": False,
-        "reasoning": {"effort": "none"}, "max_output_tokens": 1200,
-        "input": [{"role": "system", "content": SYSTEM},
+        "reasoning": {"effort": "none"}, "max_output_tokens": max_tokens,
+        "input": [{"role": "system", "content": system},
                   {"role": "user", "content": content}],
         "text": {"format": {"type": "json_schema", "name": "kevin_show_plan",
-                            "strict": True, "schema": SCHEMA}},
+                            "strict": True, "schema": schema}},
     }
     request = urllib.request.Request(ENDPOINT, json.dumps(payload).encode("utf-8"),
         {"Authorization": "Bearer " + key, "Content-Type": "application/json"})
@@ -82,10 +97,7 @@ def interpret(prompt, current_recipe, config):
             raise OpenAIPlanError("OpenAI 응답에 구조화된 계획이 없습니다.")
         # Reuse local contract validation, but do not run Ollama-specific keyword
         # grounding: it could otherwise overturn an unsupported request or negation.
-        try:
-            return _validate(json.loads(parts[0]["text"]))
-        except IntentError:
-            raise OpenAIPlanError("OpenAI 계획이 허용된 연출 계약과 다릅니다. 실행하지 않았습니다.") from None
+        return json.loads(parts[0]["text"])
     except urllib.error.HTTPError as error:
         code = error.code
         error.close()
