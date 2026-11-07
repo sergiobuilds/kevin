@@ -25,6 +25,8 @@ DEFAULT_RECIPE = dict(preset='christmas_train', speed=1, snow='normal', sky=None
 
 
 def interpret(prompt, recipe, config):
+    from ai_settings import runtime_config
+    config = runtime_config(config)
     provider = config.get('KEVIN_PLANNER', 'ollama')
     if provider == 'openai':
         module = importlib.import_module('openai_planner')
@@ -33,7 +35,7 @@ def interpret(prompt, recipe, config):
         raise ShowError('KEVIN_PLANNER must be ollama or openai')
     module = importlib.import_module('show_intent')
     return module.interpret(prompt, recipe, endpoint=config.get('KEVIN_OLLAMA_URL'),
-                            model=config.get('KEVIN_OLLAMA_MODEL'))
+                            model=config.get('KEVIN_OLLAMA_MODEL'), no_redirect=True)
 
 
 def normalized_plan(plan):
@@ -126,7 +128,7 @@ class ShowController:
             result['radio'] = self.radio.status()
         return result
 
-    def command(self, prompt, execute=False, scene=None):
+    def command(self, prompt, execute=False, scene=None, *, cancel=None, planner=None):
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 2000:
             raise ShowError('prompt must contain 1..2000 characters')
         if type(execute) is not bool:
@@ -138,11 +140,13 @@ class ShowController:
             if scene['duration'] % 10:
                 raise ShowError('exact 10ms frame delays required')
         with self.lock:
+            if cancel is not None:
+                check_cancel(cancel)
             if self.closed:
                 raise ShowError('show controller is closed')
             if self.state['status'] in ACTIVE:
                 raise ShowError('show job active; stop it before another command')
-            cancel = self.cancel = threading.Event()
+            cancel = self.cancel = cancel if cancel is not None else threading.Event()
             job_id = uuid.uuid4().hex
             recipe = copy.deepcopy(self.applied_recipe if execute or self.preview_recipe is None
                                    else self.preview_recipe)
@@ -150,7 +154,7 @@ class ShowController:
                 self.applied_scene if execute or self.preview_recipe is None else self.preview_scene))
             # MCP and the UI may temporarily supply a planner. Capture it before
             # returning so a background job cannot observe a replacement.
-            planner = self.planner
+            planner = self.planner if planner is None else planner
             self.state.update(status='queued', job_id=job_id, message='응, 들었어.',
                               transcript=prompt.strip())
             self.state.pop('plan', None)
@@ -335,7 +339,7 @@ class ShowController:
                 'audio': ('전광판은 바꿨는데 ' if visual_applied else '') +
                          '라디오 설정을 못 바꿨어. 소리 출력에 라디오 연결됐는지 봐줘.',
             }
-            if stage == 'planning' and self.config.get('KEVIN_PLANNER') == 'openai':
+            if stage == 'planning':
                 from openai_planner import OpenAIPlanError
                 if isinstance(error, OpenAIPlanError):
                     # Only this planner's explicitly redacted public messages.

@@ -50,18 +50,20 @@ function chip(id, cls, label) { const c = $(id); c.className = 'chip ' + (cls ||
 // ---------- bridge ----------
 async function call(path, body) {
   const r = await fetch(BRIDGE + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  if (!r.ok) throw new Error(`Bridge HTTP ${r.status}`);
   return r.json();
 }
 async function health() {
   try {
     const h = await call('/health');
     state.bridge = true;
-    chip('chip-bridge', 'ok');
-    chip('chip-ai', h.openai ? 'ok' : 'warn', h.openai ? 'AI·OpenAI' : 'AI·LOCAL');
+    chip('chip-bridge', 'ok', 'BRIDGE 연결됨');
+    window.KevinAI.update(h.ai);
     chip('chip-led', h.live && h.led ? 'ok' : 'warn');
     chip('chip-radio', h.live && h.radio ? 'ok' : 'warn');
   } catch { state.bridge = false; chip('chip-bridge', 'bad', 'BRIDGE 꺼짐'); }
 }
+window.addEventListener('kevin-ai-saved', health);
 
 async function ask(text) {
   text = text.trim(); if (!text) return;
@@ -77,8 +79,15 @@ async function ask(text) {
 }
 async function stopAll() {
   $('alert').hidden = true;
-  try { const r = await call('/stop', {}); say(r.reply); } catch { say('알았어, 다 멈출게.'); }
-  state.devicesOn = false; log('전부 정지');
+  try {
+    const r = await call('/stop', {});
+    if (r.error || r.stopped === false || r.status === 'error') throw new Error('Stop failed');
+    state.devicesOn = r.status === 'stopping' ? null : false; say(r.reply || '정지 요청을 전달했어.'); log('정지 요청 전달됨');
+  } catch {
+    state.devicesOn = null;
+    say('정지 요청을 확인하지 못했어. 기기 상태를 직접 확인해줘.');
+    log('정지 실패 · 기기 상태 확인 필요');
+  }
 }
 
 // ---------- voice ----------
@@ -108,6 +117,7 @@ function setMode(m) {
 
 // ---------- webcam: KEVIN's eye ----------
 const roomCam = new Image();
+roomCam.crossOrigin = 'anonymous';
 let camSource = 'room';
 async function startCam() {
   roomCam.onload = () => { chip('chip-cam', 'ok', 'CAM·방'); };
@@ -124,6 +134,7 @@ async function startCam() {
 function pullRoomCam() {
   if (camSource !== 'room') return;
   const next = new Image();
+  next.crossOrigin = 'anonymous';
   next.onload = () => { roomCam.src = next.src; setTimeout(pullRoomCam, 250); };
   next.onerror = () => { roomCam.onerror(); };
   next.src = BRIDGE + '/camera.jpg?t=' + Date.now();
@@ -136,26 +147,35 @@ function frameB64() {
   return c.toDataURL('image/jpeg', .7).split(',')[1];
 }
 async function watch() {
-  if (camReady()) {
-    ex.drawImage(camEl(), 0, 0, 160, 120);
-    const d = ex.getImageData(0, 0, 160, 120).data;
-    const g = new Uint8Array(160 * 120);
-    for (let i = 0; i < g.length; i++) g[i] = (d[4 * i] + d[4 * i + 1] + d[4 * i + 2]) / 3;
-    let changed = 0;
-    if (state.prev) for (let i = 0; i < g.length; i++) if (Math.abs(g[i] - state.prev[i]) > 28) changed++;
-    state.prev = g; state.motion = changed / g.length;
-    $('motion-bar').style.width = Math.min(100, state.motion * 600) + '%';
-    // pixelate the eye view for the DOS look
-    ex.imageSmoothingEnabled = false; ex.drawImage(eye, 0, 0, 160, 120, 0, 0, 80, 60); ex.drawImage(eye, 0, 0, 80, 60, 0, 0, 160, 120);
-    const moving = state.motion > .06;
-    if (moving) state.lastMotion = Date.now();
-    state.streak = moving ? state.streak + 1 : 0;
-    if (state.mode === 'away' && state.streak >= 2 && !state.guardBusy) guard('motion');
-    const idle = (Date.now() - state.lastMotion) / 1000;
-    if (state.mode === 'home') $('eye-note').textContent = '아무도 안 보인 지 ' + Math.floor(idle) + '초';
-    if (state.mode === 'home' && idle > 30 && state.devicesOn && !state.guardBusy) guard('idle', idle);
+  try {
+    if (camReady()) {
+      ex.drawImage(camEl(), 0, 0, 160, 120);
+      const d = ex.getImageData(0, 0, 160, 120).data;
+      const g = new Uint8Array(160 * 120);
+      for (let i = 0; i < g.length; i++) g[i] = (d[4 * i] + d[4 * i + 1] + d[4 * i + 2]) / 3;
+      let changed = 0;
+      if (state.prev) for (let i = 0; i < g.length; i++) if (Math.abs(g[i] - state.prev[i]) > 28) changed++;
+      state.prev = g; state.motion = changed / g.length;
+      $('motion-bar').style.width = Math.min(100, state.motion * 600) + '%';
+      // pixelate the eye view for the DOS look
+      ex.imageSmoothingEnabled = false; ex.drawImage(eye, 0, 0, 160, 120, 0, 0, 80, 60); ex.drawImage(eye, 0, 0, 80, 60, 0, 0, 160, 120);
+      const moving = state.motion > .06;
+      if (moving) state.lastMotion = Date.now();
+      state.streak = moving ? state.streak + 1 : 0;
+      if (state.mode === 'away' && state.streak >= 2 && !state.guardBusy) guard('motion');
+      const idle = (Date.now() - state.lastMotion) / 1000;
+      if (state.mode === 'home') $('eye-note').textContent = '아무도 안 보인 지 ' + Math.floor(idle) + '초';
+      if (state.mode === 'home' && idle > 30 && state.devicesOn && !state.guardBusy) guard('idle', idle);
+    }
+  } catch {
+    state.prev = null; state.streak = 0;
+    chip('chip-cam', 'bad', 'CAM·읽기 실패');
+    $('eye-note').textContent = '카메라 영상을 읽지 못했어요. 다시 확인하고 있어요.';
+    // Reset a tainted canvas so the next valid frame can be read.
+    eye.width = eye.width;
+  } finally {
+    setTimeout(watch, 500);
   }
-  setTimeout(watch, 500);
 }
 async function guard(kind, idle = 0) {
   state.guardBusy = true;
@@ -167,10 +187,17 @@ async function guard(kind, idle = 0) {
     if (r.action === 'intruder_alert') {
       $('alert').hidden = false; state.view = 'talk'; say(r.reply); log('침입 감지 → 경보' + (r.seen ? ' (' + r.seen + ')' : ''));
       setTimeout(() => { $('alert').hidden = true; }, 15000);
-    } else if (r.action === 'power_save') {
+    } else if (r.action === 'power_save' && r.stop_status === 'stopped') {
       state.devicesOn = false; say(r.reply); log('절약: 기기 끔');
+    } else if (r.stop_status || r.action === 'power_save') {
+      state.devicesOn = null; say(r.reply || '정지를 확인하지 못했어. 기기를 확인해줘.');
+      log(r.stop_status === 'stopping' ? '절약: 정지 확인 중' : '절약: 정지 확인 실패');
     }
-  } catch { /* bridge offline */ }
+  } catch {
+    if (kind === 'idle') {
+      state.devicesOn = null; say('정지를 확인하지 못했어. 기기를 확인해줘.'); log('절약: 정지 확인 실패');
+    }
+  }
   setTimeout(() => state.guardBusy = false, 3000);
 }
 
@@ -231,6 +258,7 @@ $('mic').onclick = listen;
 $('stop').onclick = stopAll;
 document.querySelectorAll('.modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 document.addEventListener('keydown', (e) => {
+  if (document.getElementById('ai-settings').open) return;
   if (e.key === 'Escape') { e.preventDefault(); stopAll(); }
   if (e.key === 'F1') { e.preventDefault(); setMode('talk'); }
   if (e.key === 'F2') { e.preventDefault(); setMode('away'); }
