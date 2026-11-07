@@ -87,7 +87,8 @@ class GuardianTests(unittest.TestCase):
         self.assertEqual(actions, ['none', 'none', 'intruder_alert'])
         self.assertEqual(len(self.ctrl.transport.sent), 1)
         self.assertEqual(self.ctrl.radio.played, [100])
-        self.assertIn('경찰', self.voice.said[0])
+        self.assertIn('경보', self.voice.said[0])
+        self.assertNotIn('신고했어요', self.voice.said[0])
 
     def test_alarm_does_not_repeat_during_cooldown(self):
         g = self.make([jpg(), jpg(True), jpg(), jpg(True), jpg(), jpg(True)], 'away')
@@ -95,10 +96,22 @@ class GuardianTests(unittest.TestCase):
             g.step(no_model)
         self.assertEqual(len(self.ctrl.transport.sent), 1)
 
-    def test_quiet_home_switches_devices_off_once(self):
+    def test_quiet_home_without_presence_confirmation_keeps_devices_on(self):
         g = self.make([jpg()], 'home', idle=60)
         self.assertEqual(g.step(no_model)['action'], 'none')
         self.clock.t += 61
+        self.assertEqual(g.step(no_model)['action'], 'none')
+        self.assertEqual(self.ctrl.stops, 0)
+
+    def test_confirmed_empty_home_switches_devices_off_once(self):
+        g = self.make([jpg()], 'home', idle=60)
+        class ConfirmedEmpty:
+            def look(self, _):
+                return {'motion': 0, 'people': 0, 'presence': False}
+        g.detector = ConfirmedEmpty()
+        for _ in range(6):
+            self.assertEqual(g.step(no_model)['action'], 'none')
+            self.clock.t += 10
         self.assertEqual(g.step(no_model)['action'], 'power_save')
         self.clock.t += 61
         self.assertEqual(g.step(no_model)['action'], 'none')

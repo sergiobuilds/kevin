@@ -1,11 +1,12 @@
-// KEVIN web: DOS-style face, browser webcam and voice, devices through the local bridge.
+// KEVIN web: DOS-style face, room camera and voice, devices through the local bridge.
 const params = new URLSearchParams(location.search);
 const BRIDGE = params.get('bridge') || (location.hostname.endsWith('github.io') ? 'http://127.0.0.1:8787' : location.origin);
 const $ = (id) => document.getElementById(id);
 const scene = $('scene'), sx = scene.getContext('2d');
 const eye = $('eye'), ex = eye.getContext('2d', { willReadFrequently: true });
 const state = { mode: 'talk', view: 'room', talking: false, motion: 0, prev: null, streak: 0,
-                lastMotion: Date.now(), guardBusy: false, devicesOn: true, bridge: false };
+                lastMotion: Date.now(), guardBusy: false, devicesOn: null, bridge: false, lastGuard: 0 };
+let requestVersion = 0, currentJob = null, modeVersion = 0;
 const IMG = {};
 for (const [n, f] of [['room', 'room'], ['walker', 'kevin_walker'], ['portrait', 'kevin_portrait']]) { IMG[n] = new Image(); IMG[n].src = 'assets/' + f + '.png'; }
 
@@ -19,18 +20,32 @@ function say(text, { speak = true } = {}) {
   if (speak) speakOut(text.replace(/\([^)]*\)/g, '').trim());
 }
 let voiceAudio = null;
+let voiceVersion = 0, voiceAbort = null, voiceUrl = null;
+function silence() {
+  voiceVersion++;
+  voiceAbort?.abort(); voiceAbort = null;
+  if (voiceAudio) { voiceAudio.pause(); voiceAudio = null; }
+  if (voiceUrl) { URL.revokeObjectURL(voiceUrl); voiceUrl = null; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  state.talking = false;
+}
 async function speakOut(text) {
   if (!text) return;
+  silence();
+  const version = voiceVersion;
+  voiceAbort = new AbortController();
   try {
-    if (voiceAudio) { voiceAudio.pause(); voiceAudio = null; }
-    const r = await fetch(BRIDGE + '/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    const r = await fetch(BRIDGE + '/tts', { method: 'POST', signal: voiceAbort.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
     if (!r.ok) throw new Error('tts');
-    const url = URL.createObjectURL(await r.blob());
+    const blob = await r.blob();
+    if (version !== voiceVersion) return;
+    const url = voiceUrl = URL.createObjectURL(blob);
     voiceAudio = new Audio(url);
     voiceAudio.onplay = () => state.talking = true;
-    voiceAudio.onended = () => { state.talking = false; URL.revokeObjectURL(url); };
+    voiceAudio.onended = () => { if (version === voiceVersion) state.talking = false; URL.revokeObjectURL(url); };
     await voiceAudio.play();
   } catch {
+    if (version !== voiceVersion) return;
     if (!('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; u.rate = 1.05; u.pitch = 1.3;
@@ -50,35 +65,116 @@ function chip(id, cls, label) { const c = $(id); c.className = 'chip ' + (cls ||
 // ---------- bridge ----------
 async function call(path, body) {
   const r = await fetch(BRIDGE + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
-  return r.json();
+  const result = await r.json();
+  if (!r.ok) throw new Error(result.reply || '연결 응답을 확인하지 못했어.');
+  return result;
 }
 async function health() {
   try {
     const h = await call('/health');
     state.bridge = true;
+    $('demo-note').hidden = h.simulation !== true;
     chip('chip-bridge', 'ok');
     chip('chip-ai', h.openai ? 'ok' : 'warn', h.openai ? 'AI·OpenAI' : 'AI·LOCAL');
-    chip('chip-led', h.live && h.led ? 'ok' : 'warn');
-    chip('chip-radio', h.live && h.radio ? 'ok' : 'warn');
+    chip('chip-led', h.live && h.led ? 'warn' : '', h.led ? 'LED·설정됨' : 'LED·미설정');
+    chip('chip-radio', h.live && h.radio ? 'warn' : '', h.radio ? 'RADIO·설정됨' : 'RADIO·미설정');
   } catch { state.bridge = false; chip('chip-bridge', 'bad', 'BRIDGE 꺼짐'); }
 }
 
 async function ask(text) {
   text = text.trim(); if (!text) return;
+  const version = ++requestVersion;
+  currentJob = null; silence();
+  showJob({status:'planning'});
   $('text').value = ''; state.view = 'talk'; state.lastMotion = Date.now();
   log('나: ' + text);
   say('응, 들었어.', { speak: false });
-  if (!state.bridge) { say('MSI 연결기가 꺼져 있어. cmd에서 kevin 을 실행해줘.'); return; }
+  if (!state.bridge) { showJob({status:'failed'}); say('MSI 연결기가 꺼져 있어. cmd에서 kevin 을 실행해줘.'); return; }
   try {
     const r = await call('/say', { text });
-    say(r.reply || '응!'); log('KEVIN: ' + (r.reply || '') + (r.source ? ' [' + r.source + ']' : ''));
-    if (r.plan && r.plan.mode !== 'unsupported') state.devicesOn = r.plan.mode !== 'stop';
-  } catch { say('어, 연결이 끊겼어. 다시 말해줄래?'); }
+    if (version !== requestVersion) return;
+    say(r.reply, {speak: false});
+    if (!r.job_id) throw new Error('실행 번호를 받지 못했어.');
+    currentJob = r.job_id;
+    monitorJob(r.job_id, version);
+  } catch (error) {
+    if (version !== requestVersion) return;
+    showJob({status:'failed'});
+    say(error.message || '연결이 끊겨 실행 결과를 확인하지 못했어.');
+  }
 }
 async function stopAll() {
+  const version = ++requestVersion;
+  currentJob = null; silence();
+  showJob({status:'stopping'});
   $('alert').hidden = true;
-  try { const r = await call('/stop', {}); say(r.reply); } catch { say('알았어, 다 멈출게.'); }
-  state.devicesOn = false; log('전부 정지');
+  say('중단을 요청하고 있어.', {speak: false});
+  try {
+    const r = await call('/stop', {});
+    if (version !== requestVersion) return;
+    if (!r.job_id) throw new Error('정지 응답을 받지 못했어.');
+    currentJob = r.job_id; monitorJob(r.job_id, version);
+  } catch {
+    if (version !== requestVersion) return;
+    state.devicesOn = null;
+    $('job-status').textContent = '정지 확인 실패';
+    $('job-status').dataset.status = 'failed';
+    say('중단 요청이 전달됐는지 확인하지 못했어. 장치를 직접 확인해 줘.');
+    log('정지 결과 확인 불가');
+  }
+}
+
+function showJob(job) {
+  const labels = {planning:'계획 중', running:'실행 중', observing:'관찰 중', stopping:'정지 확인 중',
+    complete:'응답 확인', preview:'미리보기', failed:'실행 실패', stopped:'중단됨', unsupported:'지원하지 않는 요청'};
+  $('job-status').textContent = labels[job.status] || '결과 확인 중';
+  $('job-status').dataset.status = job.status;
+  const replies = Object.entries(job.device_results || {}).map(([name, reply]) =>
+    `${name === 'led' ? '전광판' : '라디오'}: ${reply?.status || '미확인'}`);
+  $('device-results').textContent = replies.join(' · ') || '아직 장치 응답이 없습니다.';
+  const observation = job.observation || {};
+  $('observation-result').textContent = observation.status === 'available'
+    ? `화면 변화 ${observation.changed ? '있음' : '없음'} · 실제 목표 달성·소리는 별도 확인`
+    : '관찰 자료 없음 · 장치 응답과 실제 동작은 구분합니다.';
+  const receipt = job.receipt;
+  const valid = receipt && /^\/evidence\/[0-9]{8}-[0-9]{6}-[a-f0-9]{6}\/receipt\.json$/.test(receipt.url);
+  $('receipt-link').hidden = !valid;
+  if (valid) {
+    $('receipt-link').href = BRIDGE + receipt.url;
+    $('receipt-link').textContent = receipt.integrity_verified ? '서명·이미지 해시 확인된 기록 ↗' : '관찰 기록 확인 ↗';
+    const prefix = receipt.url.slice(0, receipt.url.lastIndexOf('/') + 1);
+    $('evidence-before').src = BRIDGE + prefix + 'before.jpg';
+    $('evidence-after').src = BRIDGE + prefix + 'after1.jpg';
+  }
+  $('evidence-images').hidden = !valid;
+}
+async function monitorJob(id, version) {
+  const deadline = Date.now() + 180000;
+  try {
+    while (version === requestVersion && currentJob === id) {
+      const data = await call('/jobs/' + id);
+      if (version !== requestVersion || currentJob !== id) return;
+      const job = data.job;
+      if (!job || job.job_id !== id) throw new Error('실행 결과를 찾지 못했어.');
+      showJob(job);
+      if (['complete','preview','failed','stopped','unsupported'].includes(job.status)) {
+        currentJob = null;
+        if (job.status === 'stopped') state.devicesOn = false;
+        else if (job.status === 'failed') state.devicesOn = null;
+        const message = job.message || '실행 결과를 확인해 줘.';
+        say(message); log('KEVIN: ' + message);
+        return;
+      }
+      if (Date.now() > deadline) throw new Error('응답이 늦어 실행 결과를 확인하지 못했어.');
+      await new Promise(resolve => setTimeout(resolve, 400));
+    }
+  } catch (error) {
+    if (version !== requestVersion) return;
+    currentJob = null; state.devicesOn = null;
+    $('job-status').textContent = '결과 확인 불가';
+    $('job-status').dataset.status = 'failed';
+    say(error.message); log('실행 결과 확인 불가');
+  }
 }
 
 // ---------- voice ----------
@@ -96,39 +192,43 @@ function listen() {
 }
 
 // ---------- modes ----------
-function setMode(m) {
+async function setMode(m) {
+  const version = ++modeVersion;
+  try { await call('/mode', {mode:m}); } catch { say('모드를 바꾸지 못했어. 연결을 확인해 줘.'); return; }
+  if (version !== modeVersion) return;
   state.mode = m; state.streak = 0; state.lastMotion = Date.now();
   document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
-  const notes = { talk: '말을 걸면 케빈이 대답해요.', away: '사람이 보이면 「나 홀로 집에」처럼 겁을 줘요.', home: '30초 동안 아무도 없으면 기기를 꺼요.' };
+  const notes = { talk: '말을 걸면 케빈이 대답해요.', away: '사람을 확인하면 경보를 요청해요. 실제 신고 기능은 없습니다.', home: '새 영상에서 사람이 없는 상태를 30초간 확인해야 기기를 꺼요. 확인 불가는 보류해요.' };
   $('mode-note').textContent = notes[m];
-  say({ talk: '응, 말 걸어줘.', away: '다녀와. 집은 내가 지킬게.', home: '아무도 없으면 내가 알아서 끌게.' }[m]);
+  say({ talk: '응, 말 걸어줘.', away: '다녀와. 사람이 보이는지 확인할게.', home: '사람이 없는 상태가 확인되면 끌게. 못 보면 기다릴게.' }[m]);
   state.view = m === 'talk' ? 'talk' : 'room';
   log('모드: ' + m);
 }
 
 // ---------- webcam: KEVIN's eye ----------
 const roomCam = new Image();
+roomCam.crossOrigin = 'anonymous';
 let camSource = 'room';
+let lastRoomFrame = 0;
 async function startCam() {
-  roomCam.onload = () => { chip('chip-cam', 'ok', 'CAM·방'); };
+  roomCam.onload = () => { lastRoomFrame = Date.now(); chip('chip-cam', 'ok', 'CAM·방'); };
   roomCam.onerror = async () => {
     if (camSource !== 'room') return;
-    camSource = 'browser';
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
-      $('cam').srcObject = s; chip('chip-cam', 'ok', 'CAM·이 기기'); $('eye-note').textContent = '이 기기 카메라로 보고 있어.';
-    } catch { chip('chip-cam', 'bad'); $('eye-note').textContent = '방 카메라가 꺼져 있어요.'; }
+    lastRoomFrame = 0; state.prev = null;
+    chip('chip-cam', 'bad', 'CAM·확인 불가');
+    $('eye-note').textContent = '방 카메라를 확인할 수 없어 자동 동작을 보류해요.';
   };
   pullRoomCam();
 }
 function pullRoomCam() {
   if (camSource !== 'room') return;
   const next = new Image();
+  next.crossOrigin = 'anonymous';
   next.onload = () => { roomCam.src = next.src; setTimeout(pullRoomCam, 250); };
-  next.onerror = () => { roomCam.onerror(); };
+  next.onerror = () => { roomCam.onerror(); setTimeout(pullRoomCam, 2000); };
   next.src = BRIDGE + '/camera.jpg?t=' + Date.now();
 }
-function camReady() { return camSource === 'room' ? roomCam.complete && roomCam.naturalWidth > 0 : $('cam').readyState >= 2; }
+function camReady() { return roomCam.complete && roomCam.naturalWidth > 0 && Date.now() - lastRoomFrame < 2500; }
 function camEl() { return camSource === 'room' ? roomCam : $('cam'); }
 function frameB64() {
   const c = document.createElement('canvas'); c.width = 320; c.height = 240;
@@ -136,6 +236,7 @@ function frameB64() {
   return c.toDataURL('image/jpeg', .7).split(',')[1];
 }
 async function watch() {
+  try {
   if (camReady()) {
     ex.drawImage(camEl(), 0, 0, 160, 120);
     const d = ex.getImageData(0, 0, 160, 120).data;
@@ -151,27 +252,32 @@ async function watch() {
     if (moving) state.lastMotion = Date.now();
     state.streak = moving ? state.streak + 1 : 0;
     if (state.mode === 'away' && state.streak >= 2 && !state.guardBusy) guard('motion');
-    const idle = (Date.now() - state.lastMotion) / 1000;
-    if (state.mode === 'home') $('eye-note').textContent = '아무도 안 보인 지 ' + Math.floor(idle) + '초';
-    if (state.mode === 'home' && idle > 30 && state.devicesOn && !state.guardBusy) guard('idle', idle);
+    if (state.mode === 'home' && !currentJob && !state.guardBusy && Date.now() - state.lastGuard >= 5000) guard('presence');
   }
-  setTimeout(watch, 500);
+  } catch { state.prev = null; $('eye-note').textContent = '영상을 읽지 못해 자동 동작을 보류해요.'; }
+  finally { setTimeout(watch, 500); }
 }
 async function guard(kind, idle = 0) {
   state.guardBusy = true;
+  state.lastGuard = Date.now();
+  const version = requestVersion, mode = state.mode;
   try {
-    const body = kind === 'idle' ? { kind, mode: 'home', idle_seconds: Math.floor(idle), idle_limit: 30 }
-                                 : { kind, mode: 'away', streak: state.streak, image: frameB64() };
+    const body = {kind, mode};
     const r = state.bridge ? await call('/guard', body) : { action: 'none' };
+    if (version !== requestVersion || mode !== state.mode) return;
     if (r.seen) $('eye-note').textContent = '본 것: ' + r.seen;
+    if (r.presence === 'present') $('eye-note').textContent = '사람이 보여요. 절약 동작을 보류해요.';
+    if (r.presence === 'absent') $('eye-note').textContent = `사람 없음 확인 중 · ${r.absence_seconds || 0}초`;
+    if (r.action === 'unavailable') $('eye-note').textContent = r.reply;
     if (r.action === 'intruder_alert') {
       $('alert').hidden = false; state.view = 'talk'; say(r.reply); log('침입 감지 → 경보' + (r.seen ? ' (' + r.seen + ')' : ''));
       setTimeout(() => { $('alert').hidden = true; }, 15000);
     } else if (r.action === 'power_save') {
-      state.devicesOn = false; say(r.reply); log('절약: 기기 끔');
+      say(r.reply, {speak:false}); log('절약: 중단 요청');
     }
+    if (r.job_id) { currentJob = r.job_id; monitorJob(r.job_id, version); }
   } catch { /* bridge offline */ }
-  setTimeout(() => state.guardBusy = false, 3000);
+  finally { setTimeout(() => state.guardBusy = false, 3000); }
 }
 
 // ---------- scene: 320x200 VGA ----------
@@ -242,5 +348,5 @@ setInterval(health, 5000);
 health(); startCam().then(watch); requestAnimationFrame(draw);
 say('안녕, 난 케빈이야. 이 집은 내가 맡을게. 말 걸어줘.', { speak: false });
 if (params.get('view') === 'talk') { state.view = 'talk'; say(params.get('line') || '좋아, 산타 날리고 눈 펑펑 내리게 할게!', { speak: false }); }
-if (params.get('view') === 'alert') { state.mode = 'away'; state.view = 'talk'; $('alert').hidden = false; say('누구세요? 지금 경찰에 신고했어요!', { speak: false }); }
+if (params.get('view') === 'alert') { state.view = 'talk'; $('alert').hidden = false; say('경보 화면 미리보기야. 실제 신고 기능은 없어.', { speak: false }); }
 $('text').focus();

@@ -76,16 +76,19 @@ class Detector:
             import numpy as np
             rects, _ = self.hog.detectMultiScale(np.array(image.resize((640, 360))), winStride=(8, 8))
             people = len(rects)
-        return {'motion': round(motion, 4), 'people': people}
+        # HOG missing a person does not establish that a room is empty.
+        return {'motion': round(motion, 4), 'people': people,
+                'presence': True if people else None}
 
 
 # ---------- deciding ----------
 
 def rule(obs: dict) -> tuple[str, str]:
     if obs['mode'] == 'away' and obs['suspicious_streak'] >= 2:
-        return 'intruder_alert', '누구세요? 지금 경찰에 신고했어요!'
-    if (obs['mode'] == 'home' and obs['devices_on'] and obs['idle_seconds'] >= obs['idle_limit']):
-        return 'power_save', '한동안 아무도 없어서 전광판이랑 라디오 껐어.'
+        return 'intruder_alert', '누구세요? 경보를 울립니다!'
+    if (obs['mode'] == 'home' and obs['devices_on'] and obs.get('absence_confirmed') is True
+            and obs['idle_seconds'] >= obs['idle_limit']):
+        return 'power_save', '사람이 없는 상태를 확인해서 기기 중단을 요청할게.'
     return 'none', ''
 
 
@@ -127,7 +130,7 @@ def intruder_scene() -> dict:
     """Flashing red warning for the 144x16 sign (kept under the panel's frame limit)."""
     frames = []
     for i, (bg, fg, text) in enumerate([('#c00010', '#ffffff', '누구야?!'), ('#000000', '#ff2a3d', '누구야?!'),
-                                         ('#c00010', '#ffffff', '경찰 신고'), ('#000000', '#ffd75c', 'KEVIN 집 지킴')]):
+                                         ('#c00010', '#ffffff', '경보 작동'), ('#000000', '#ffd75c', 'KEVIN 집 지킴')]):
         image = Image.new('RGB', (144, 16), bg)
         draw = ImageDraw.Draw(image)
         font = _font(13)
@@ -149,6 +152,7 @@ class Guardian:
         self.voice, self.mode, self.idle_limit = voice, mode, idle_limit
         self.clock = clock
         self.last_seen = clock()
+        self.absent_since = self.last_observation = None
         self.streak = 0
         self.devices_on = mode == 'home'
         self.alarm_until = 0
@@ -162,9 +166,17 @@ class Guardian:
         suspicious = seen['people'] > 0 or seen['motion'] >= 0.08
         if suspicious:
             self.last_seen = now
+        absent = seen.get('presence') is False and not suspicious
+        if not absent:
+            self.absent_since = None
+        elif self.absent_since is None or self.last_observation is None or now - self.last_observation > 12:
+            self.absent_since = now
+        self.last_observation = now
         self.streak = self.streak + 1 if suspicious else 0
         return dict(seen, mode=self.mode, suspicious_streak=self.streak,
-                    idle_seconds=round(now - self.last_seen), idle_limit=self.idle_limit,
+                    absence_confirmed=absent,
+                    idle_seconds=round(now - self.absent_since) if self.absent_since is not None else 0,
+                    idle_limit=self.idle_limit,
                     devices_on=self.devices_on, alarm_active=now < self.alarm_until), jpg
 
     def step(self, reasoner=reason) -> dict:

@@ -8,6 +8,9 @@ scissors, number guessing, word chain) with the sign as the game board.
 from __future__ import annotations
 
 import json
+import copy
+import math
+import re
 
 ANIMS = ['static', 'scroll_left', 'blink', 'snowflake', 'fade']
 SCHEMA = {
@@ -81,15 +84,55 @@ snow "keep", sky "keep", score 0, title "", tempo 120, notes [], volume null, rp
 """
 
 
-def decide(text: str, history: list, state: dict, openai_json) -> dict:
+def decide(text: str, history: list, state: dict, openai_json, *, judge=True) -> dict:
     convo = '\n'.join(f"{h['who']}: {h['text']}" for h in history[-10:])
     user = json.dumps({'지금까지 대화': convo, '현재 기기 상태': state, '사람이 방금 한 말': text}, ensure_ascii=False)
     import os
     out = openai_json(SYSTEM, user, SCHEMA, 'kevin_turn', timeout=40, model=os.getenv('KEVIN_AGENT_MODEL', 'gpt-5.4'))
+    out = validate_turn(out)
+    return judge_rps(out) if judge else out
+
+
+def validate_turn(out):
+    """Validate model output before any device or game-state effect."""
+    def validate(value, schema):
+        kind = schema['type']
+        kinds = kind if isinstance(kind, list) else [kind]
+        matches = {'object': isinstance(value, dict), 'array': isinstance(value, list),
+                   'string': isinstance(value, str), 'integer': type(value) is int,
+                   'number': type(value) in (int, float) and math.isfinite(value), 'null': value is None}
+        if not any(matches.get(k, False) for k in kinds):
+            raise ValueError('invalid agent field type')
+        if 'enum' in schema and value not in schema['enum']:
+            raise ValueError('unsupported agent field')
+        if kind == 'object':
+            if set(value) != set(schema['required']):
+                raise ValueError('invalid agent fields')
+            for key, item in value.items(): validate(item, schema['properties'][key])
+        elif kind == 'array':
+            if len(value) > 60: raise ValueError('too many notes')
+            for item in value: validate(item, schema['items'])
+    validate(out, SCHEMA)
+    out = copy.deepcopy(out)
     led, music = out['led'], out['music']
-    led['text'] = led['text'][:80]
-    music['notes'] = music['notes'][:60]
-    return judge_rps(out)
+    if len(out['reply']) > 1000 or len(led['text']) > 80 or (led['mode'] == 'text' and not led['text'].strip()):
+        raise ValueError('invalid text length')
+    for key in ('color', 'bg'):
+        if not re.fullmatch(r'#[0-9A-Fa-f]{6}', led[key]): raise ValueError('invalid color')
+    if led['sky'] != 'keep' and not re.fullmatch(r'#[0-9A-Fa-f]{6}', led['sky']):
+        raise ValueError('invalid sky color')
+    if any(not 0 <= led[key] <= 99 for key in ('score_left', 'score_right')):
+        raise ValueError('invalid score')
+    if music['volume'] is not None and not 0 <= music['volume'] <= 100:
+        raise ValueError('invalid volume')
+    if not 60 <= music['tempo'] <= 200 or len(music['title']) > 200:
+        raise ValueError('invalid song')
+    if music['mode'] == 'song' and not music['notes']:
+        raise ValueError('song requires notes')
+    for note in music['notes']:
+        if not re.fullmatch(r'(?:[A-G][#b]?[3-6]|R)', note['n']) or not .125 <= note['b'] <= 4:
+            raise ValueError('invalid note')
+    return out
 
 
 HAND = {'rock': ('바위', '✊'), 'paper': ('보', '✋'), 'scissors': ('가위', '✌️')}
@@ -97,9 +140,10 @@ BEATS = {'rock': 'scissors', 'paper': 'rock', 'scissors': 'paper'}
 SCORE = {'human': 0, 'kevin': 0}
 
 
-def judge_rps(out):
+def judge_rps(out, score=None):
     """Rock-paper-scissors is judged by rule, not by the model."""
     import random
+    score = SCORE if score is None else score
     h = out['rps']['human']
     if h not in HAND:
         return out
@@ -109,13 +153,13 @@ def judge_rps(out):
         result, line = 'draw', '비겼다! 한 판 더?'
     elif BEATS[k] == h:
         result, line = 'kevin', '내가 이겼다~ ㅋㅋ'
-        SCORE['kevin'] += 1
+        score['kevin'] += 1
     else:
         result, line = 'human', '으악, 네가 이겼어! 한 판 더!'
-        SCORE['human'] += 1
-    out['reply'] = f"난 {HAND[k][0]}! {line} ({SCORE['human']}:{SCORE['kevin']})"
+        score['human'] += 1
+    out['reply'] = f"난 {HAND[k][0]}! {line} ({score['human']}:{score['kevin']})"
     tag = {'draw': '비김', 'kevin': '케빈 승', 'human': '너 승'}[result]
-    out['led'].update(mode='text', text=f"{HAND[h][1]} vs {HAND[k][1]} {tag} {SCORE['human']}:{SCORE['kevin']}", animation='static',
+    out['led'].update(mode='text', text=f"{HAND[h][1]} vs {HAND[k][1]} {tag} {score['human']}:{score['kevin']}", animation='static',
                       color='#FFD75C', bg='#000000')
     out['rps_result'] = result
     return out
