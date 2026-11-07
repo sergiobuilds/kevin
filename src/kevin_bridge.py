@@ -28,6 +28,7 @@ import guardian
 import kevin_agent
 import show_intent
 import song
+from show_transport import check_cancel
 
 def _load_env_file():
     """Read KEY=VALUE lines from .openai.env next to the repo, if the shell did not set them."""
@@ -198,6 +199,8 @@ class Bridge:
             controller = ShowController()
         self.c = controller
         self.lock = threading.Lock()
+        self.job_lock = threading.RLock()
+        self.job_cancel = threading.Event()
         self.alarm_until = 0
         self.eye = Eye()
 
@@ -207,14 +210,32 @@ class Bridge:
                 'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()),
                 'led': bool(os.getenv('KEVIN_LED_ADDRESS')), 'radio': os.getenv('KEVIN_RADIO_DEVICE') or None}
 
-    def say(self, text):
-        with self.lock:
-            self.history = getattr(self, 'history', [])
+    def _new_job(self):
+        with self.job_lock:
             prev = getattr(self, 'job_cancel', None)
             if prev:
                 prev.set()
             self.c.supersede()
-            cancel = self.job_cancel = threading.Event()
+            self.job_cancel = threading.Event()
+            return self.job_cancel
+
+    def stop(self):
+        # Planning and device waits must never hold this lifecycle lock.
+        with self.job_lock:
+            if getattr(self, 'job_cancel', None):
+                self.job_cancel.set()
+            return self.c.stop()
+
+    def _command(self, text, plan, cancel):
+        with self.job_lock:
+            check_cancel(cancel)
+            return self.c.command(text, self.c.live_configured, cancel=cancel,
+                                  planner=lambda *_: dict(plan))
+
+    def say(self, text):
+        with self.lock:
+            self.history = getattr(self, 'history', [])
+            cancel = self._new_job()
             state = self.c.get_state()
             summary = {'recipe': state.get('recipe'), 'led': getattr(self, 'led_now', 'scene'),
                        'radio': (state.get('radio') or {}).get('status')}
@@ -222,7 +243,9 @@ class Bridge:
                 turn = kevin_agent.decide(text, self.history, summary, openai_json)
                 source = 'openai-agent'
             except Exception:
-                return self._say_plan(text)
+                return self._say_plan(text, cancel)
+            if cancel.is_set():
+                return {'reply': '알았어, 다 멈출게.', 'source': source, 'cancelled': True}
             self.history += [{'who': '사람', 'text': text}, {'who': 'KEVIN', 'text': turn['reply']}]
             self.history = self.history[-20:]
             threading.Thread(target=self._act, args=(turn, cancel), daemon=True).start()
@@ -235,6 +258,7 @@ class Bridge:
             v = (v or '').strip().lstrip('#')
             return v.lower() if len(v) == 6 and all(ch in '0123456789abcdefABCDEF' for ch in v) else d
         try:
+            check_cancel(cancel)
             if led['mode'] == 'scene':
                 plan = {'mode': 'update', 'preset': led['preset'], 'speed': None, 'snow': led['snow'],
                         'sky': led['sky'].lower() if len(led['sky']) == 7 and led['sky'].startswith('#') else 'keep',
@@ -242,8 +266,7 @@ class Bridge:
                         'volume': music['volume'], 'explanation': turn['reply']}
                 if music['mode'] == 'carol':
                     self.c.audio_prepared = False
-                self.c.planner = self._once(plan)
-                self.c.command('agent', live)
+                self._command('agent', plan, cancel)
                 self.led_now = 'scene'
             elif live and led['mode'] == 'text' and led['text'].strip():
                 anim = {'scroll_left': 'scroll_left', 'blink': 'blink', 'snowflake': 'snowflake', 'fade': 'fade'}.get(led['animation'], 'static')
@@ -262,15 +285,18 @@ class Bridge:
                 return
             if music['mode'] == 'song' and music['notes']:
                 wav = song.melody_wav(music['notes'], music['tempo'] or 120)
+                check_cancel(cancel)
                 self.c.radio.close()
                 self.c.radio.audio_path.parent.mkdir(parents=True, exist_ok=True)
                 self.c.radio.audio_path.write_bytes(wav)
                 self.c.audio_prepared = True
+                check_cancel(cancel)
                 self._radio(self.c.radio.play(music['volume'] or 60, cancel))
             elif music['mode'] == 'carol' and led['mode'] != 'scene':
                 self.c.radio.close()
                 self.c.audio_prepared = False
                 self.c._prepare_audio(cancel)
+                check_cancel(cancel)
                 self._radio(self.c.radio.play(music['volume'] or 60, cancel))
             elif music['mode'] == 'stop' and led['mode'] != 'scene':
                 self._radio(self.c.radio.stop())
@@ -281,25 +307,21 @@ class Bridge:
         with self.c.lock:
             self.c.state['radio'] = dict(result or {}, audible_verified=False)
 
-    def _say_plan(self, text):
+    def _say_plan(self, text, cancel):
         state = self.c.get_state()
         current = dict(state.get('recipe') or {})
         p, source = plan(text, current)
+        if cancel.is_set():
+            return {'reply': '알았어, 다 멈출게.', 'source': source, 'cancelled': True}
         if p['mode'] == 'unsupported':
             return {'reply': p['explanation'], 'plan': p, 'source': source}
         if p['mode'] == 'stop':
-            self.c.stop()
+            with self.job_lock:
+                check_cancel(cancel)
+                self.stop()
             return {'reply': p['explanation'], 'plan': p, 'source': source}
-        self.c.planner = self._once(p)
-        self.c.command(text, self.c.live_configured)
+        self._command(text, p, cancel)
         return {'reply': p['explanation'], 'plan': p, 'source': source}
-
-    def _once(self, plan):
-        """A planner the show job reads exactly once, so the job thread can never miss it."""
-        def planner(_text, _recipe):
-            self.c.planner = None
-            return dict(plan)
-        return planner
 
     def guard(self, body):
         mode = body.get('mode', 'away')
@@ -309,11 +331,17 @@ class Bridge:
                    'idle_limit': int(body.get('idle_limit', 30)), 'suspicious_streak': 0}
             action, why = guardian.rule(obs)
             if action == 'power_save':
-                self.c.stop()
+                self.stop()
             return {'action': action, 'reply': why}
         if mode != 'away' or now < self.alarm_until:
             return {'action': 'none', 'reply': ''}
+        # Observation alone must not interrupt a running user command. Keep
+        # its generation so stop/new commands invalidate delayed vision.
+        with self.job_lock:
+            observed_job = self.job_cancel
         person, what = see_person(body.get('image') or base64.b64encode(self.eye.jpeg() or b'').decode())
+        if observed_job.is_set():
+            return {'action': 'none', 'reply': '', 'cancelled': True}
         streak = int(body.get('streak', 0))
         if person is False:  # the camera moved, but nobody is there
             return {'action': 'none', 'reply': '', 'seen': what}
@@ -322,14 +350,20 @@ class Bridge:
         action, why = guardian.rule(obs)
         if action != 'intruder_alert':
             return {'action': 'none', 'reply': ''}
-        self.alarm_until = now + 60
-        cancel = threading.Event()
+        with self.job_lock:
+            if observed_job is not self.job_cancel or observed_job.is_set() or now < self.alarm_until:
+                return {'action': 'none', 'reply': '', 'cancelled': True}
+            cancel = self._new_job()
+            self.alarm_until = now + 60
         result = {'action': action, 'reply': why, 'seen': what}
         def act():
             try:
                 if self.c.live_configured:
+                    check_cancel(cancel)
                     self.c.transport.send(guardian.intruder_scene(), cancel)
+                    check_cancel(cancel)
                     self.c._prepare_audio(cancel)
+                    check_cancel(cancel)
                     self.c.radio.play(100, cancel)
             except Exception:
                 pass
@@ -421,10 +455,7 @@ def make_handler(bridge):
                     self.wfile.write(audio)
                     return
                 if self.path.startswith('/stop'):
-                    if getattr(bridge, 'job_cancel', None):
-                        bridge.job_cancel.set()
-                    bridge.c.supersede()
-                    bridge.c.stop()
+                    bridge.stop()
                     return self._send(200, {'reply': '알았어, 다 멈출게.'})
                 if self.path.startswith('/guard'):
                     return self._send(200, bridge.guard(body))

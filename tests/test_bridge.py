@@ -1,6 +1,7 @@
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 import kevin_bridge
 from show_control import ShowController
@@ -40,11 +41,14 @@ class BridgeTests(unittest.TestCase):
         c = ShowController(transport=led, radio=Radio(), config={'KEVIN_SHOW_LIVE': '1', 'KEVIN_LED_ADDRESS': 'x', 'KEVIN_RADIO_DEVICE': 'CRF-35B'})
         bridge = kevin_bridge.Bridge.__new__(kevin_bridge.Bridge)
         bridge.c, bridge.lock, bridge.alarm_until = c, threading.Lock(), 0
-        kevin_bridge.plan = lambda text, cur: ({'mode': 'update', 'preset': 'santa' if '산타' in text else 'christmas_train', 'speed': None,
+        bridge.job_lock = threading.RLock()
+        bridge.job_cancel = threading.Event()
+        fallback = lambda text, cur: ({'mode': 'update', 'preset': 'santa' if '산타' in text else 'christmas_train', 'speed': None,
                                                'snow': 'keep', 'sky': 'keep', 'music': 'keep', 'volume': None, 'explanation': 'ok'}, 'test')
-        first = bridge.say('기차')
-        time.sleep(.3)
-        second = bridge.say('산타')
+        with patch.object(kevin_bridge.kevin_agent, 'decide', side_effect=RuntimeError('offline test')), patch.object(kevin_bridge, 'plan', side_effect=fallback):
+            first = bridge.say('기차')
+            time.sleep(.3)
+            second = bridge.say('산타')
         self.assertNotIn('busy', first)
         self.assertNotIn('busy', second)
         end = time.time() + 6

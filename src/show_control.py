@@ -126,7 +126,7 @@ class ShowController:
             result['radio'] = self.radio.status()
         return result
 
-    def command(self, prompt, execute=False, scene=None):
+    def command(self, prompt, execute=False, scene=None, *, cancel=None, planner=None):
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 2000:
             raise ShowError('prompt must contain 1..2000 characters')
         if type(execute) is not bool:
@@ -138,11 +138,13 @@ class ShowController:
             if scene['duration'] % 10:
                 raise ShowError('exact 10ms frame delays required')
         with self.lock:
+            if cancel is not None:
+                check_cancel(cancel)
             if self.closed:
                 raise ShowError('show controller is closed')
             if self.state['status'] in ACTIVE:
                 raise ShowError('show job active; stop it before another command')
-            cancel = self.cancel = threading.Event()
+            cancel = self.cancel = cancel if cancel is not None else threading.Event()
             job_id = uuid.uuid4().hex
             recipe = copy.deepcopy(self.applied_recipe if execute or self.preview_recipe is None
                                    else self.preview_recipe)
@@ -150,7 +152,7 @@ class ShowController:
                 self.applied_scene if execute or self.preview_recipe is None else self.preview_scene))
             # MCP and the UI may temporarily supply a planner. Capture it before
             # returning so a background job cannot observe a replacement.
-            planner = self.planner
+            planner = self.planner if planner is None else planner
             self.state.update(status='queued', job_id=job_id, message='응, 들었어.',
                               transcript=prompt.strip())
             self.state.pop('plan', None)
