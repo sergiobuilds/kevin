@@ -17,6 +17,9 @@ import sys
 import threading
 import time
 import urllib.request
+from urllib.parse import urlsplit
+import urllib.parse
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -30,6 +33,8 @@ import guardian
 import kevin_agent
 import show_intent
 import song
+from show_transport import check_cancel
+from ai_settings import AISettings, SettingsError, runtime_config, request_json as ai_json
 
 def _load_env_file():
     """Read KEY=VALUE lines from .openai.env next to the repo, if the shell did not set them."""
@@ -53,7 +58,10 @@ class Eye:
         self.captured_at = None
         self.error = None
         self.camera_name = None
-        threading.Thread(target=self._run, daemon=True).start()
+        if os.getenv('KEVIN_CAMERA', '').strip().lower() == 'off':
+            self.error = 'camera disabled'
+        else:
+            threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
         try:
@@ -86,7 +94,9 @@ class Eye:
 
     def _open_best(self, cv2):
         """Laptops often expose an IR face camera first; pick the camera with a visible picture."""
-        wanted = os.getenv('KEVIN_CAMERA', '')
+        wanted = os.getenv('KEVIN_CAMERA', '').strip()
+        if wanted.lower() == 'off':
+            return None
         order = [int(wanted)] if wanted.isdigit() else [0, 1, 2, 3]
         best, best_mean = None, -1.0
         for index in order:
@@ -179,16 +189,10 @@ def openai_json(system: str, user_content, schema: dict, name: str, timeout=30, 
 
 
 def plan(text: str, current: dict) -> tuple[dict, str]:
-    """OpenAI first, on-device model second; explicit words always win (show_intent.ground)."""
-    if os.getenv('OPENAI_API_KEY', '').strip():
-        try:
-            raw = openai_json(show_intent.SYSTEM,
-                              json.dumps({'prompt': text, 'current_recipe': current}, ensure_ascii=False),
-                              show_intent.SCHEMA, 'kevin_plan')
-            return show_intent._validate(show_intent.ground(text, show_intent._validate(raw), current)), 'openai'
-        except Exception:
-            pass
-    return show_intent.interpret(text, current), 'local'
+    """Use the selected command AI, without a silent cross-provider fallback."""
+    from show_control import interpret
+    config = runtime_config()
+    return interpret(text, current, config), config['KEVIN_PLANNER']
 
 
 VISION_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': ['person', 'what'],
@@ -216,14 +220,31 @@ from bridge_runtime import BridgeRuntime
 
 
 class Bridge(BridgeRuntime):
-    def __init__(self, controller=None, eye=None, **kwargs):
+    def __init__(self, controller=None, eye=None, ai=None, **kwargs):
         if controller is None:
             from show_control import ShowController
             controller = ShowController()
+        self.ai = ai or AISettings()
+        def selected_agent(text, history, state):
+            if not self.ai.public()['configured']:
+                raise SettingsError('명령 해석 AI 설정이 필요합니다.')
+            config = runtime_config(self.ai.env)
+            def selected_json(system, content, schema, name, timeout=30, model=None):
+                return ai_json(system, content, schema, config)
+            try:
+                return kevin_agent.decide(text, history, state, selected_json, judge=False)
+            except Exception:
+                self.ai.mark_failed()
+                raise
+        def selected_plan(text, current):
+            from show_control import interpret
+            if not self.ai.public()['configured']:
+                raise SettingsError('명령 해석 AI 설정이 필요합니다.')
+            config = runtime_config(self.ai.env)
+            return interpret(text, current, config), config['KEVIN_PLANNER']
         super().__init__(controller, Eye() if eye is None else eye,
-            plan_fn=kwargs.pop('plan_fn', plan),
-            agent_fn=kwargs.pop('agent_fn', lambda text, history, state:
-                kevin_agent.decide(text, history, state, openai_json, judge=False)),
+            plan_fn=kwargs.pop('plan_fn', selected_plan),
+            agent_fn=kwargs.pop('agent_fn', selected_agent),
             vision_fn=kwargs.pop('vision_fn', see_person), **kwargs)
 
     def health(self):
@@ -234,32 +255,79 @@ class Bridge(BridgeRuntime):
                 'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()),
                 'led': bool(self.c.config.get('KEVIN_LED_ADDRESS')),
                 'radio': self.c.config.get('KEVIN_RADIO_DEVICE') or None,
-                'mode': self.mode, 'idle_limit': self.idle_limit,
+                'ai': self.ai.public(), 'mode': self.mode, 'idle_limit': self.idle_limit,
                 'availability_scope': 'configured_not_device_verified'}
 
 
 def make_handler(bridge):
+    extra_hosts = {v.strip().lower() for v in os.getenv('KEVIN_BRIDGE_ALLOWED_HOSTS', '').split(',') if v.strip()}
+    extra_origins = {v.strip() for v in os.getenv('KEVIN_BRIDGE_ALLOWED_ORIGINS', '').split(',') if v.strip()}
     class Handler(BaseHTTPRequestHandler):
+        WEB_ORIGIN = 'https://sergiobuilds.github.io'
+
         def log_message(self, *a):
             pass
 
-        def _send(self, code, data):
+        def _access(self):
+            """Reject DNS rebinding and requests from unrelated browser sites."""
+            hosts = self.headers.get_all('Host', [])
+            try:
+                host = urlsplit('http://' + hosts[0]) if len(hosts) == 1 else None
+                valid_host = (host is not None and host.hostname
+                              and not host.username and not host.password and not host.path
+                              and not host.query and not host.fragment and
+                              ((host.hostname in ('127.0.0.1', 'localhost', '::1') and
+                                (host.port or 80) == self.server.server_port) or hosts[0].lower() in extra_hosts))
+            except ValueError:
+                valid_host = False
+            if not valid_host:
+                self._send(403, {'error': 'local bridge Host required'})
+                return False
+            allowed = {self.WEB_ORIGIN, 'http://' + hosts[0]} | extra_origins
+            if hosts[0].lower() in extra_hosts:
+                allowed.add('https://' + hosts[0])
+            origins = self.headers.get_all('Origin', [])
+            if origins:
+                if len(origins) != 1 or origins[0] not in allowed:
+                    self._send(403, {'error': 'origin not allowed'})
+                    return False
+                self._allowed_origin = origins[0]
+            elif self.headers.get('Sec-Fetch-Site') in ('cross-site', 'same-site'):
+                # <img> camera requests do not carry Origin. Require the known
+                # web UI's Referer rather than exposing frames to arbitrary sites.
+                ref = urlsplit(self.headers.get('Referer', ''))
+                if ref.scheme + '://' + ref.netloc not in allowed:
+                    self._send(403, {'error': 'browser site not allowed'})
+                    return False
+            return True
+
+        def _cors(self):
+            origin = getattr(self, '_allowed_origin', None)
+            if origin:
+                self.send_header('Access-Control-Allow-Origin', origin)
+                self.send_header('Vary', 'Origin')
+                self.send_header('Access-Control-Allow-Private-Network', 'true')
+
+        def _send(self, code, data, private=False):
             body = json.dumps(data, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
             self.send_header('Cache-Control', 'no-store')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Private-Network', 'true')
+            if not private:
+                self._cors()
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
         def do_OPTIONS(self):
+            if not self._access():
+                return
+            if self.path.startswith('/ai/'):
+                return self._send(403, {'error': '로컬 앱에서 AI 설정을 열어 주세요.'}, private=True)
             self.send_response(204)
-            self.send_header('Access-Control-Allow-Origin', '*')
+            self._cors()
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.send_header('Access-Control-Allow-Private-Network', 'true')
             self.end_headers()
 
         def _static(self):
@@ -283,6 +351,15 @@ def make_handler(bridge):
             return True
 
         def do_GET(self):
+            if not self._access():
+                return
+            if self.path == '/ai/config':
+                if not self._ai_access():
+                    return
+                try:
+                    return self._send(200, {'settings': bridge.ai.public(), 'csrf': bridge.ai.csrf}, private=True)
+                except SettingsError as error:
+                    return self._send(400, {'error': str(error)}, private=True)
             if self.path.startswith('/health'):
                 return self._send(200, bridge.health())
             if self.path.startswith('/camera.jpg'):
@@ -292,7 +369,7 @@ def make_handler(bridge):
                 self.send_response(200)
                 self.send_header('Content-Type', 'image/jpeg')
                 self.send_header('Cache-Control', 'no-store')
-                self.send_header('Access-Control-Allow-Origin', '*')
+                self._cors()
                 self.send_header('Content-Length', str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
@@ -325,9 +402,19 @@ def make_handler(bridge):
                 self._send(404, {'error': 'not found'})
 
         def do_POST(self):
+            if not self._access():
+                return
+            if self.headers.get_content_type() != 'application/json':
+                return self._send(415, {'error': 'application/json required'})
+            if self.path.startswith('/ai/'):
+                return self._ai_post()
             try:
                 n = int(self.headers.get('Content-Length', '0'))
-                body = json.loads(self.rfile.read(min(n, 4_000_000)) or b'{}')
+                if not 0 <= n <= 4_000_000:
+                    return self._send(413, {'error': 'request too large'})
+                body = json.loads(self.rfile.read(n) or b'{}')
+                if not isinstance(body, dict):
+                    return self._send(400, {'error': 'JSON object required'})
                 if self.path.startswith('/say'):
                     return self._send(200, bridge.say(str(body.get('text', ''))[:500]))
                 if self.path.startswith('/tts'):
@@ -336,7 +423,7 @@ def make_handler(bridge):
                         return self._send(503, {'error': 'voice unavailable'})
                     self.send_response(200)
                     self.send_header('Content-Type', 'audio/mpeg')
-                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self._cors()
                     self.send_header('Content-Length', str(len(audio)))
                     self.end_headers()
                     self.wfile.write(audio)
@@ -350,6 +437,46 @@ def make_handler(bridge):
                 self._send(404, {'error': 'not found'})
             except Exception:
                 self._send(400, {'error': 'request failed', 'reply': '요청을 처리하지 못했어. 실행 결과를 확인해 줘.'})
+
+        def _ai_access(self, write=False):
+            # Protect the new credential-writing surface from hosted pages and DNS rebinding.
+            host = self.headers.get('Host', '')
+            try:
+                parsed = urllib.parse.urlsplit('http://' + host)
+                allowed = {'127.0.0.1', 'localhost', '::1', self.server.server_address[0]}
+                valid = (parsed.hostname in allowed and (parsed.port or 80) == self.server.server_port and
+                         not parsed.username and not parsed.password and not parsed.path)
+            except ValueError:
+                valid = False
+            origin = self.headers.get('Origin')
+            if not valid or origin not in (None, 'http://' + host):
+                self._send(403, {'error': '로컬 앱에서 AI 설정을 열어 주세요.'}, private=True)
+                return False
+            if write and not hmac.compare_digest(self.headers.get('X-KEVIN-Setup', '').encode(), bridge.ai.csrf.encode()):
+                self._send(403, {'error': '설정을 다시 열어 주세요.'}, private=True)
+                return False
+            return True
+
+        def _ai_post(self):
+            if not self._ai_access(write=True):
+                return
+            try:
+                n = int(self.headers.get('Content-Length', '0'))
+                if not 0 < n <= 8192 or self.headers.get_content_type() != 'application/json':
+                    return self._send(400, {'error': 'AI 설정 요청 형식을 확인하세요.'}, private=True)
+                body = json.loads(self.rfile.read(n))
+                if not isinstance(body, dict):
+                    raise SettingsError('AI 설정 요청 형식을 확인하세요.')
+                if self.path == '/ai/test' and set(body) == {'draft'}:
+                    return self._send(200, bridge.ai.test(body['draft']), private=True)
+                if self.path == '/ai/save' and set(body) == {'draft', 'test_id'}:
+                    result = bridge.ai.save(body['draft'], body['test_id'])
+                    return self._send(200, {'settings': result}, private=True)
+                raise SettingsError('AI 설정 요청 형식을 확인하세요.')
+            except SettingsError as error:
+                self._send(400, {'error': str(error)}, private=True)
+            except Exception:
+                self._send(400, {'error': 'AI 설정을 처리하지 못했습니다.'}, private=True)
     return Handler
 
 
@@ -361,7 +488,8 @@ WARM_LINES = ['안녕, 난 케빈이야. 이 집은 내가 맡을게. 말 걸어
 def warm_up():
     """Open the OpenAI/ElevenLabs connections and cache fixed lines so the first request is fast."""
     try:
-        plan('하늘 그대로 둬', {})
+        if AISettings().public()['configured']:
+            plan('하늘 그대로 둬', {})
     except Exception:
         pass
     for line in WARM_LINES:

@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PIL import Image
 import kevin_bridge

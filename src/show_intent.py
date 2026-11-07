@@ -236,12 +236,24 @@ def reply(plan, current=None):
     return "좋아, " + " ".join([mid for mid, _ in parts[:-1]] + [parts[-1][1]]) + "!"
 
 
-def interpret(prompt, current_recipe, endpoint=None, model=None):
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def interpret(prompt, current_recipe, endpoint=None, model=None, no_redirect=False):
     """Return validated change instructions, or raise IntentError (no fallback)."""
     if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 2000:
         raise IntentError("연출 요청은 1–2000자여야 합니다.")
     if current_recipe is not None and not isinstance(current_recipe, dict):
         raise IntentError("현재 연출은 객체여야 합니다.")
+    spec = request_json(SYSTEM, {"prompt": prompt.strip(), "current_recipe": current_recipe},
+                        SCHEMA, endpoint=endpoint, model=model, no_redirect=no_redirect)
+    return _validate(ground(prompt, _validate(spec), current_recipe))
+
+
+def request_json(system, content, schema, endpoint=None, model=None, timeout=None, max_tokens=600, no_redirect=False):
+    """Structured local inference shared by setup probes and dialogue."""
     base = endpoint if endpoint is not None else os.getenv("KEVIN_OLLAMA_URL", "http://127.0.0.1:11434")
     selected = model if model is not None else os.getenv("KEVIN_OLLAMA_MODEL", "qwen2.5:3b")
     if not isinstance(base, str) or not isinstance(selected, str) or not selected.strip():
@@ -253,23 +265,24 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
         url = base.rstrip("/")
         if not url.endswith("/api/chat"):
             url += "/api/chat"
-        timeout = float(os.getenv("KEVIN_OLLAMA_TIMEOUT", "180"))
+        timeout = float(timeout if timeout is not None else os.getenv("KEVIN_OLLAMA_TIMEOUT", "180"))
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError()
-        content = json.dumps({"prompt": prompt.strip(), "current_recipe": current_recipe}, ensure_ascii=False, allow_nan=False)
+        content = json.dumps(content, ensure_ascii=False, allow_nan=False)
         if len(content) > 16000:
             raise ValueError()
     except (ValueError, TypeError):
         raise IntentError("Ollama 설정 또는 현재 연출 데이터가 올바르지 않습니다.") from None
     body = {
-        "model": selected, "stream": False, "think": False, "format": SCHEMA,
-        "options": {"temperature": 0, "num_predict": 600},
-        "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": content}],
+        "model": selected, "stream": False, "think": False, "format": schema,
+        "options": {"temperature": 0, "num_predict": max_tokens},
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}],
     }
     for attempt in range(2):
         request = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            open_request = urllib.request.build_opener(_NoRedirect).open if no_redirect else urllib.request.urlopen
+            with open_request(request, timeout=timeout) as response:
                 raw = response.read(128001)
             if len(raw) > 128000:
                 raise IntentError("AI 응답이 허용 크기를 초과했습니다.")
@@ -279,7 +292,7 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
             message = result.get("message")
             if not isinstance(message, dict) or not isinstance(message.get("content"), str):
                 raise IntentError("AI 응답에 해석 결과가 없습니다.")
-            return _validate(ground(prompt, _validate(json.loads(message["content"])), current_recipe))
+            return json.loads(message["content"])
         except urllib.error.HTTPError as exc:
             try:
                 detail = exc.read(2048).decode("utf-8", errors="replace").lower()

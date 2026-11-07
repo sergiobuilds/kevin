@@ -311,9 +311,20 @@ def main(argv=None):
                         help='실제 LED 전광판과 블루투스 라디오로 내보냅니다. 없으면 미리보기만 합니다.')
     parser.add_argument('--planner', choices=('ollama', 'openai'),
                         help='계획 모델 선택. 기본 Ollama; openai는 API 키가 필요합니다.')
+    parser.add_argument('--setup', action='store_true', help='공통 명령 해석 AI 설정')
     args = parser.parse_args(argv)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         parser.error('실제 터미널에서 실행해 주세요. 브라우저는 사용하지 않습니다.')
+    from ai_settings import AISettings, terminal_setup
+    settings = AISettings()
+    try:
+        if args.setup:
+            terminal_setup(settings)
+            return
+        if args.planner is None and not settings.public()['configured']:
+            terminal_setup(settings)
+    except ValueError as error:
+        parser.error(str(error))
     backend = Backend(args.live, planner=args.planner)
     game = Game(backend)
     try:

@@ -115,17 +115,19 @@ class LedTransport:
         finally:
             await asyncio.wait_for(session.disconnect(), timeout=5)
 
-    async def _cancellable_transfer(self, data, cancel, brightness):
+    async def _cancellable(self, operation, cancel, timeout):
         async def watch():
             while not cancel.is_set():
                 await asyncio.sleep(.025)
-        work = asyncio.create_task(self._transfer(data, cancel, brightness))
+        work = asyncio.create_task(operation)
         watcher = asyncio.create_task(watch())
         try:
-            done, _ = await asyncio.wait((work, watcher), timeout=90,
+            done, _ = await asyncio.wait((work, watcher), timeout=timeout,
                                          return_when=asyncio.FIRST_COMPLETED)
             if work in done:
-                return await work
+                result = await work
+                check_cancel(cancel)
+                return result
             if cancel.is_set():
                 raise Cancelled('show cancelled')
             raise TransportError('panel transfer timeout')
@@ -148,7 +150,7 @@ class LedTransport:
         try:
             with self.lock:
                 check_cancel(cancel)
-                asyncio.run(self._cancellable_transfer(data, cancel, brightness))
+                asyncio.run(self._cancellable(self._transfer(data, cancel, brightness), cancel, 90))
         except Cancelled:
             raise
         except Exception as error:
@@ -169,6 +171,7 @@ class LedTransport:
             result = await session.execute_command(COMMANDS[name], *args, **kwargs)
             if result.success is not True:
                 raise TransportError('panel command was not acknowledged')
+            check_cancel(cancel)
         finally:
             await asyncio.wait_for(session.disconnect(), timeout=5)
 
@@ -179,7 +182,7 @@ class LedTransport:
         try:
             with self.lock:
                 check_cancel(cancel)
-                asyncio.run(self._cancellable_command(name, args, kwargs, cancel))
+                asyncio.run(self._cancellable(self._command(name, args, kwargs, cancel), cancel, 60))
         except Cancelled:
             raise
         except Exception as error:

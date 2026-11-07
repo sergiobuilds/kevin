@@ -74,12 +74,13 @@ async function health() {
     const h = await call('/health');
     state.bridge = true;
     $('demo-note').hidden = h.simulation !== true;
-    chip('chip-bridge', 'ok');
-    chip('chip-ai', h.openai ? 'ok' : 'warn', h.openai ? 'AI·OpenAI' : 'AI·LOCAL');
+    chip('chip-bridge', 'ok', 'BRIDGE 연결됨');
+    window.KevinAI.update(h.ai);
     chip('chip-led', h.live && h.led ? 'warn' : '', h.led ? 'LED·설정됨' : 'LED·미설정');
     chip('chip-radio', h.live && h.radio ? 'warn' : '', h.radio ? 'RADIO·설정됨' : 'RADIO·미설정');
   } catch { state.bridge = false; chip('chip-bridge', 'bad', 'BRIDGE 꺼짐'); }
 }
+window.addEventListener('kevin-ai-saved', health);
 
 async function ask(text) {
   text = text.trim(); if (!text) return;
@@ -254,7 +255,7 @@ async function watch() {
     if (state.mode === 'away' && state.streak >= 2 && !state.guardBusy) guard('motion');
     if (state.mode === 'home' && !currentJob && !state.guardBusy && Date.now() - state.lastGuard >= 5000) guard('presence');
   }
-  } catch { state.prev = null; $('eye-note').textContent = '영상을 읽지 못해 자동 동작을 보류해요.'; }
+  } catch { state.prev = null; state.streak = 0; eye.width = eye.width; chip('chip-cam', 'bad', 'CAM·읽기 실패'); $('eye-note').textContent = '영상을 읽지 못해 자동 동작을 보류해요.'; }
   finally { setTimeout(watch, 500); }
 }
 async function guard(kind, idle = 0) {
@@ -337,6 +338,7 @@ $('mic').onclick = listen;
 $('stop').onclick = stopAll;
 document.querySelectorAll('.modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 document.addEventListener('keydown', (e) => {
+  if (document.getElementById('ai-settings').open) return;
   if (e.key === 'Escape') { e.preventDefault(); stopAll(); }
   if (e.key === 'F1') { e.preventDefault(); setMode('talk'); }
   if (e.key === 'F2') { e.preventDefault(); setMode('away'); }

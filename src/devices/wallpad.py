@@ -90,6 +90,8 @@ class _HTTPAdapter:
                 if method != 'GET':
                     context['sent'] = True
                 response = self._opener.open(request, timeout=timeout)
+                if method != 'GET':
+                    context['write_response_received'] = True
             with response:
                 pieces, size = [], 0
                 while True:

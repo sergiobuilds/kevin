@@ -111,7 +111,7 @@ class BridgeRuntime:
                            'led': self.led_now, 'radio': (state.get('radio') or {}).get('status')}
             try:
                 turn = kevin_agent.validate_turn(self.agent_fn(text, history, summary))
-                source = 'openai-agent'
+                source = 'selected-agent'
             except Exception:
                 check_cancel(cancel)
                 p, source = self.plan_fn(text, summary['recipe'] or {})
@@ -157,12 +157,8 @@ class BridgeRuntime:
         self._ready(cancel)
         with self.lock:
             check_cancel(cancel)
-            previous = self.c.planner
-            self.c.planner = lambda _t, _r: dict(plan)
-            try:
-                request = self.c.command(text, self.c.live_configured)
-            finally:
-                self.c.planner = previous
+            request = self.c.command(text, self.c.live_configured, cancel=cancel,
+                                     planner=lambda _t, _r: dict(plan))
             self._update(job, status='running', controller_job_id=request['job_id'], message='장치 응답을 기다리고 있어.')
         deadline = time.monotonic() + 120
         while True:

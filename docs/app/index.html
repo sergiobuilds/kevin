@@ -13,7 +13,7 @@
     <span class="logo">KEVIN<span class="cursor">▌</span></span>
     <span class="chips">
       <span id="chip-bridge" class="chip">BRIDGE</span>
-      <span id="chip-ai" class="chip">AI</span>
+      <button id="chip-ai" class="chip" type="button" aria-haspopup="dialog" title="명령 해석 AI 설정">AI 설정</button>
       <span id="chip-led" class="chip">LED</span>
       <span id="chip-radio" class="chip">RADIO</span>
       <span id="chip-cam" class="chip">CAM</span>
@@ -70,6 +70,29 @@
     <div class="keys">Enter 보내기 · Space(빈 입력에서) 말하기 · Esc 전부 정지 · F1~F3 모드</div>
   </section>
 </div>
+<dialog id="ai-settings" aria-labelledby="ai-title">
+  <form id="ai-form">
+    <div class="ai-heading"><h2 id="ai-title">명령 해석 AI</h2><button id="ai-close" type="button" aria-label="설정 닫기">✕</button></div>
+    <p class="ai-intro">케빈이 말을 이해하는 방식을 선택하세요.</p>
+    <div id="ai-remote" hidden><p>AI 설정은 케빈이 실행 중인 컴퓨터에서 열어 주세요.</p><a id="ai-local-link">로컬 앱에서 설정 열기</a></div>
+    <div id="ai-fields">
+      <fieldset class="ai-choices"><legend class="sr-only">AI 실행 방식</legend>
+        <label><input type="radio" name="provider" value="ollama"> <span><strong>이 컴퓨터에서 실행</strong><small>Ollama에 설치된 모델을 사용합니다.</small></span></label>
+        <label><input type="radio" name="provider" value="openai"> <span><strong>내 API 키로 연결</strong><small>OpenAI API를 사용합니다. 사용량에 따라 API 요금이 발생합니다.</small></span></label>
+      </fieldset>
+      <div id="ai-key-row" hidden><label for="ai-key">OpenAI API 키</label><div class="ai-key-line"><input id="ai-key" type="password" autocomplete="off" spellcheck="false" maxlength="1024"><button id="ai-reveal" type="button" aria-pressed="false">표시</button></div><small id="ai-key-note">키는 이 컴퓨터의 개인 설정 파일에 평문으로 저장하고 OpenAI 인증에만 사용합니다.</small></div>
+      <details id="ai-advanced"><summary>고급 설정</summary>
+        <label for="ai-model">사용 모델</label><input id="ai-model" required maxlength="120" spellcheck="false">
+        <div id="ai-url-row"><label for="ai-url">Ollama 주소</label><input id="ai-url" type="url" value="http://127.0.0.1:11434" spellcheck="false"></div>
+      </details>
+      <p id="ai-managed" class="ai-note" hidden>환경변수로 지정된 항목은 실행 환경에서 변경해 주세요.</p>
+      <p class="ai-note">이 선택은 명령 해석에 적용됩니다. 음성·카메라는 별도 외부 연결을 사용할 수 있어요.</p>
+      <p id="ai-feedback" role="status" aria-live="polite"></p>
+      <div class="ai-actions"><button id="ai-later" type="button">나중에 설정</button><button id="ai-test" type="button">연결 확인</button><button id="ai-save" type="submit" disabled>저장하고 시작</button></div>
+    </div>
+  </form>
+</dialog>
+<script src="ai-setup.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
