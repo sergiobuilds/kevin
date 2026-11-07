@@ -76,6 +76,78 @@ def _validate(spec):
     return dict(spec, sky=spec["sky"].lower(), explanation=spec["explanation"].strip())
 
 
+COLORS = {
+    "빨강": "#d0202a", "빨간": "#d0202a", "red": "#d0202a",
+    "주황": "#f07818", "orange": "#f07818",
+    "노랑": "#e8c020", "노란": "#e8c020", "yellow": "#e8c020",
+    "초록": "#1f8a3a", "녹색": "#1f8a3a", "green": "#1f8a3a",
+    "파랑": "#1d3f9e", "파란": "#1d3f9e", "blue": "#1d3f9e",
+    "남색": "#14215c", "navy": "#14215c",
+    "보라": "#5b2a9e", "purple": "#5b2a9e", "violet": "#5b2a9e",
+    "분홍": "#d8508a", "핑크": "#d8508a", "pink": "#d8508a",
+    "검정": "#05060c", "까만": "#05060c", "검은": "#05060c", "black": "#05060c",
+    "밤하늘": "#0b1a3a",
+}
+_STOP_ALL = re.compile(r"(전부|모두|다|전체|싹|all|everything).{0,4}(멈|정지|꺼|그만|중지|stop)|^(멈춰|정지|그만|stop)[!. ]*$", re.I)
+_MUSIC = re.compile(r"음악|캐럴|캐롤|노래|라디오|music|song|carol", re.I)
+_OFF = re.compile(r"꺼|끄|멈|정지|그만|중지|stop|off", re.I)
+_ON = re.compile(r"틀|켜|재생|play|on\b|들려", re.I)
+_SNOW = re.compile(r"눈|snow", re.I)
+_SKY = re.compile(r"하늘|배경|sky|background", re.I)
+_SPEED = re.compile(r"빨리|빠르|천천히|느리|느리게|속도|fast|slow|speed", re.I)
+_VOLUME = re.compile(r"소리|볼륨|음량|크게|작게|volume|louder|quieter", re.I)
+
+
+def ground(prompt, spec, current):
+    """Pin the model's plan to what the sentence explicitly says.
+
+    A small local model understands paraphrases but drifts on details (colours,
+    scene names, stop scope). Explicit words win; fields the sentence never
+    mentions stay unchanged, so the model cannot invent side effects.
+    """
+    text = prompt.strip()
+    current = current or {}
+    out = dict(spec)
+    keep = {"preset": "keep", "speed": None, "snow": "keep", "sky": "keep", "music": "keep", "volume": None}
+    if _STOP_ALL.search(text):
+        return dict(out, mode="stop", **dict(keep, music="stop"))
+    if "산타" in text or re.search(r"santa", text, re.I):
+        out["preset"] = "santa"
+    elif "기차" in text or re.search(r"train", text, re.I):
+        out["preset"] = "christmas_train" if out["preset"] != "keep" or not current else out["preset"]
+    elif not re.search(r"크리스마스|christmas|장면|scene", text, re.I):
+        out["preset"] = "keep"
+    if _MUSIC.search(text):
+        out["music"] = "stop" if _OFF.search(text) and not _ON.search(text) else "play"
+    else:
+        out["music"] = "keep"
+    if _SNOW.search(text):
+        if re.search(r"펑펑|많이|폭설|함박|heavy|more", text, re.I):
+            out["snow"] = "heavy"
+        elif re.search(r"그쳐|없|멈|그만|no snow|stop", text, re.I):
+            out["snow"] = "none"
+        elif out["snow"] == "keep":
+            out["snow"] = "normal"
+    else:
+        out["snow"] = "keep"
+    color = next((hexv for word, hexv in COLORS.items() if word in text.lower()), None)
+    if color:
+        out["sky"] = color
+    elif not _SKY.search(text):
+        out["sky"] = "keep"
+    if not _SPEED.search(text):
+        out["speed"] = None
+    if not _VOLUME.search(text):
+        out["volume"] = None
+    changed = any(out[k] != v for k, v in keep.items())
+    if not changed:
+        return dict(out, mode="unsupported", **keep,
+                    explanation="지금 연결된 기기로는 할 수 없는 요청이에요.")
+    if out["mode"] in ("stop", "unsupported"):
+        out["mode"] = "update" if current else "start"
+    return out
+
+
 def interpret(prompt, current_recipe, endpoint=None, model=None):
     """Return validated change instructions, or raise IntentError (no fallback)."""
     if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 2000:
@@ -83,7 +155,7 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
     if current_recipe is not None and not isinstance(current_recipe, dict):
         raise IntentError("현재 연출은 객체여야 합니다.")
     base = endpoint if endpoint is not None else os.getenv("TERMINATOR_OLLAMA_URL", "http://127.0.0.1:11434")
-    selected = model if model is not None else os.getenv("TERMINATOR_OLLAMA_MODEL", "qwen3.8:27b")
+    selected = model if model is not None else os.getenv("TERMINATOR_OLLAMA_MODEL", "qwen2.5:3b")
     if not isinstance(base, str) or not isinstance(selected, str) or not selected.strip():
         raise IntentError("Ollama 주소와 모델 설정을 확인하세요.")
     try:
@@ -119,7 +191,7 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
             message = result.get("message")
             if not isinstance(message, dict) or not isinstance(message.get("content"), str):
                 raise IntentError("AI 응답에 해석 결과가 없습니다.")
-            return _validate(json.loads(message["content"]))
+            return _validate(ground(prompt, _validate(json.loads(message["content"])), current_recipe))
         except urllib.error.HTTPError as exc:
             try:
                 detail = exc.read(2048).decode("utf-8", errors="replace").lower()

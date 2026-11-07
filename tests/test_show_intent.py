@@ -60,17 +60,25 @@ class IntentTests(unittest.TestCase):
                 with self.assertRaises(show_intent.IntentError):
                     show_intent.interpret("요청", {})
 
-    def test_start_stop_unsupported_and_color(self):
-        for mode, changes in (
-            ("start", {"preset": "christmas_train", "sky": "#Aa0033"}),
-            ("stop", {"snow": "keep", "music": "stop"}),
-            ("unsupported", {"snow": "keep"}),
-        ):
-            spec = {**UPDATE, "mode": mode, **changes}
-            with patch("urllib.request.urlopen", return_value=response(spec)):
-                result = show_intent.interpret("요청", {})
-                self.assertEqual(result["mode"], mode)
-                self.assertEqual(result["sky"], spec["sky"].lower())
+    def test_explicit_words_override_model_drift(self):
+        # A small model often picks the wrong scene, colour or stop scope; the
+        # sentence's explicit words must win and unmentioned fields stay put.
+        cases = (
+            ("크리스마스 기차 보여줘, 하늘은 보라색", {"mode": "start", "preset": "christmas_train", "sky": "#f39c12"},
+             {"mode": "start", "preset": "christmas_train", "sky": "#5b2a9e", "music": "keep"}),
+            ("산타 날려줘, 눈 펑펑", {"preset": "christmas_train", "snow": "normal", "music": "stop"},
+             {"preset": "santa", "snow": "heavy", "music": "keep", "sky": "keep"}),
+            ("전부 멈춰", {"snow": "normal", "music": "stop"},
+             {"mode": "stop", "preset": "keep", "snow": "keep", "music": "stop"}),
+            ("피자 시켜줘", {"preset": "christmas_train", "music": "stop", "volume": 45},
+             {"mode": "unsupported", "preset": "keep", "music": "keep", "volume": None}),
+        )
+        for prompt, model_out, expected in cases:
+            spec = {**UPDATE, **model_out}
+            with self.subTest(prompt=prompt), patch("urllib.request.urlopen", return_value=response(spec)):
+                result = show_intent.interpret(prompt, {"speed": 1})
+                for key, value in expected.items():
+                    self.assertEqual(result[key], value, key)
 
     def test_invalid_input_never_calls_model(self):
         for prompt, recipe in (("", {}), ("x" * 2001, {}), (None, {}), ("hi", []), ("hi", {"speed": float("nan")})):
