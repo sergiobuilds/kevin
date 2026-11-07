@@ -189,5 +189,49 @@
     "공식 심사 점수·수상·고객 매출을 입증하는 자료는 없습니다."
   ],
   "landing_url": "https://kevin-landing-sable.vercel.app/",
-  "technical_evidence": "https://github.com/sergiobuilds/kevin/blob/4a310d8/docs/TECHNICAL_EVIDENCE.md"
+  "technical_evidence": "https://github.com/sergiobuilds/kevin/blob/4a310d8/docs/TECHNICAL_EVIDENCE.md",
+  "presentation_sources": {
+    "github_commit": "4434b0f7fa9b545aff26c30ae63b62135a6d4fc2",
+    "readme": "https://github.com/sergiobuilds/kevin/blob/4434b0f/README.md",
+    "business": "https://github.com/sergiobuilds/kevin/blob/4434b0f/docs/BUSINESS.md",
+    "deck": "https://sergiobuilds.github.io/kevin/pitch/",
+    "images": "image-sources.json"
+  },
+  "application_scenarios": {
+    "status": "illustrative_expansion",
+    "items": [
+      "산업 현장",
+      "두더지게임·오락실",
+      "의료기기 모니터링",
+      "엘리베이터",
+      "매장",
+      "스마트팜"
+    ],
+    "physical_customer_validation": false
+  },
+  "economics": {
+    "status": "business_hypothesis",
+    "pricing": "연 59000원 가정, 최종 이용가구 기준",
+    "scenarios": [
+      {
+        "households": 170000,
+        "annual_price_krw": 59000,
+        "gross_annual_revenue_krw": 10030000000
+      },
+      {
+        "households": 230000,
+        "annual_price_krw": 59000,
+        "gross_annual_revenue_krw": 13570000000
+      },
+      {
+        "households": 1150000,
+        "annual_price_krw": 59000,
+        "gross_annual_revenue_krw": 67850000000
+      }
+    ],
+    "limits": [
+      "실제 고객 계약·플랫폼 매출·이익이 아닙니다.",
+      "이용률·가격·API 비용·현장 지원비·고객 획득비·유지보수 비용은 미검증입니다."
+    ]
+  }
 }

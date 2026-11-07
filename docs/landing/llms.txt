@@ -19,3 +19,6 @@ The landing page and this document describe the same project. Capabilities are c
 
 ## Evidence scope
 LED physical operation and home radio listening have maintainer/user-reported history. Receipt tests use synthetic images and camera mocks: 21 tests rerun and passed on 2026-11-07. Extension protocol demos are not consumer-hardware validation. Signatures protect record integrity, not semantic success, trusted sensor capture or externally authenticated signer identity. The existing web bridge and MCP receipt path are distinct integration paths. Landing illustrations do not issue real device commands.
+
+## Application scenarios and economics
+The landing includes the six scenario illustrations from GitHub commit 4434b0f: factory, whack-a-mole arcade, medical-monitor observation, elevator, store and farm. These are expansion illustrations, not installed customer or industrial-hardware proof. Published web screenshots show waiting, conversation and alert UI. B2B buyers and pricing units are hypotheses: agent platform per device/call, telecom per household/evidence event, property operator per site, manufacturer per model license. Annual revenue examples use unvalidated assumptions of 170000/230000/1150000 end households at KRW 59000 per year, producing KRW 10.03/13.57/67.85 billion gross annual revenue, not profit or signed platform contracts.
