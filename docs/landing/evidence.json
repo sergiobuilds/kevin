@@ -187,5 +187,7 @@
     "현재 웹 브리지와 MCP 영수증 경로의 통합 범위는 다릅니다.",
     "04–07 확장 트랙의 자연어 자동 라우팅은 미연결입니다.",
     "공식 심사 점수·수상·고객 매출을 입증하는 자료는 없습니다."
-  ]
+  ],
+  "landing_url": "https://kevin-landing-sable.vercel.app/",
+  "technical_evidence": "https://github.com/sergiobuilds/kevin/blob/4a310d8/docs/TECHNICAL_EVIDENCE.md"
 }

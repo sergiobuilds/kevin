@@ -16,6 +16,8 @@
 
 ## 제품과 검증 근거
 
+[KEVIN 랜딩페이지](https://kevin-landing-sable.vercel.app/)에서 실제 사용 장면과 기술 구조를 볼 수 있습니다.
+
 [랜딩페이지 소스](docs/landing/index.html)에서 사용 장면과 실행 구조를, [기술 검증 문서](docs/TECHNICAL_EVIDENCE.md)에서 기능별 주장과 소스·검사·한계를 확인할 수 있습니다. [기계 판독용 근거](docs/landing/evidence.json)와 [텍스트 요약](docs/landing/llms.txt)도 같은 사실을 제공합니다. LED 실물 동작 이력, 로컬 프로토콜 데모, 구현과 향후 계획을 구분합니다.
 
 ## AI에게는 손이 없다

@@ -1,0 +1,5 @@
+.git/
+.vercel/
+.env*
+**/__pycache__/
+**/.verify/

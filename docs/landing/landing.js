@@ -39,7 +39,7 @@ const scenes = {
   game: {
     request:'“가위바위보 하자.\n나는 바위.”',
     plan:{human:'rock',kevin:'scissors',judge:'Python rules',result:'human_win'},
-    title:'모델은 제안하고, 규칙은 판정합니다.',
+    title:'규칙 기반 게임 판정',
     copy:'바위와 가위의 예시에서는 사람이 이깁니다. 결과와 점수는 Python 규칙으로 판정합니다. 여기는 실제 게임 실행이 아닌 흐름 예시입니다.',
     text:'ROCK > SCISSORS'
   }

@@ -5,9 +5,9 @@
 The landing page and this document describe the same project. Capabilities are classified by evidence scope rather than implied universal support.
 
 ## Project
-- [Landing page](https://sergiobuilds.github.io/kevin/landing/): Product, illustrative workflows, architecture and verification scope.
+- [Landing page](https://kevin-landing-sable.vercel.app/): Product, illustrative workflows, architecture and verification scope.
 - [Source repository](https://github.com/sergiobuilds/kevin): MIT-licensed Python and JavaScript source.
-- [Technical evidence](https://github.com/sergiobuilds/kevin/blob/codex/kevin-landing-evidence/docs/TECHNICAL_EVIDENCE.md): Claim-to-source mapping, limitations and reproduction instructions.
+- [Technical evidence](https://github.com/sergiobuilds/kevin/blob/4a310d8/docs/TECHNICAL_EVIDENCE.md): Claim-to-source mapping, limitations and reproduction instructions.
 - [Capability evidence](./evidence.json): Machine-readable status and source links, snapshot 2026-11-07 at ab0a856.
 
 ## Engineering

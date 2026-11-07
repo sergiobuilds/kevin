@@ -11,3 +11,7 @@ docs/demo/review.html
 
 # Local landing screenshots and browser review
 /docs/landing/.verify/
+.vercel
+.env*
+
+/.verify/
