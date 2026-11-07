@@ -24,6 +24,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # embedded Pythons ign
 import guardian
 import show_intent
 
+def _load_env_file():
+    """Read KEY=VALUE lines from .openai.env next to the repo, if the shell did not set them."""
+    path = Path(__file__).resolve().parent.parent / '.openai.env'
+    if path.is_file():
+        for line in path.read_text(encoding='utf-8-sig').splitlines():
+            key, sep, value = line.strip().partition('=')
+            if sep and key and not os.getenv(key):
+                os.environ[key] = value.strip().strip('"')
+
+
+_load_env_file()
 PORT = int(os.getenv('KEVIN_BRIDGE_PORT', '8787'))
 OPENAI_URL = 'https://api.openai.com/v1/responses'
 
