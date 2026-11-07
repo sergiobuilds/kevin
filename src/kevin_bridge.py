@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 import urllib.request
+from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -387,26 +388,70 @@ class Bridge:
 
 
 def make_handler(bridge):
+    extra_hosts = {v.strip().lower() for v in os.getenv('KEVIN_BRIDGE_ALLOWED_HOSTS', '').split(',') if v.strip()}
+    extra_origins = {v.strip() for v in os.getenv('KEVIN_BRIDGE_ALLOWED_ORIGINS', '').split(',') if v.strip()}
     class Handler(BaseHTTPRequestHandler):
+        WEB_ORIGIN = 'https://sergiobuilds.github.io'
+
         def log_message(self, *a):
             pass
+
+        def _access(self):
+            """Reject DNS rebinding and requests from unrelated browser sites."""
+            hosts = self.headers.get_all('Host', [])
+            try:
+                host = urlsplit('http://' + hosts[0]) if len(hosts) == 1 else None
+                valid_host = (host is not None and host.hostname
+                              and not host.username and not host.password and not host.path
+                              and not host.query and not host.fragment and
+                              ((host.hostname in ('127.0.0.1', 'localhost', '::1') and
+                                (host.port or 80) == self.server.server_port) or hosts[0].lower() in extra_hosts))
+            except ValueError:
+                valid_host = False
+            if not valid_host:
+                self._send(403, {'error': 'local bridge Host required'})
+                return False
+            allowed = {self.WEB_ORIGIN, 'http://' + hosts[0]} | extra_origins
+            if hosts[0].lower() in extra_hosts:
+                allowed.add('https://' + hosts[0])
+            origins = self.headers.get_all('Origin', [])
+            if origins:
+                if len(origins) != 1 or origins[0] not in allowed:
+                    self._send(403, {'error': 'origin not allowed'})
+                    return False
+                self._allowed_origin = origins[0]
+            elif self.headers.get('Sec-Fetch-Site') in ('cross-site', 'same-site'):
+                # <img> camera requests do not carry Origin. Require the known
+                # web UI's Referer rather than exposing frames to arbitrary sites.
+                ref = urlsplit(self.headers.get('Referer', ''))
+                if ref.scheme + '://' + ref.netloc not in allowed:
+                    self._send(403, {'error': 'browser site not allowed'})
+                    return False
+            return True
+
+        def _cors(self):
+            origin = getattr(self, '_allowed_origin', None)
+            if origin:
+                self.send_header('Access-Control-Allow-Origin', origin)
+                self.send_header('Vary', 'Origin')
+                self.send_header('Access-Control-Allow-Private-Network', 'true')
 
         def _send(self, code, data):
             body = json.dumps(data, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Private-Network', 'true')
+            self._cors()
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
         def do_OPTIONS(self):
+            if not self._access():
+                return
             self.send_response(204)
-            self.send_header('Access-Control-Allow-Origin', '*')
+            self._cors()
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.send_header('Access-Control-Allow-Private-Network', 'true')
             self.end_headers()
 
         def _static(self):
@@ -430,6 +475,8 @@ def make_handler(bridge):
             return True
 
         def do_GET(self):
+            if not self._access():
+                return
             if self.path.startswith('/health'):
                 return self._send(200, bridge.health())
             if self.path.startswith('/camera.jpg'):
@@ -439,7 +486,7 @@ def make_handler(bridge):
                 self.send_response(200)
                 self.send_header('Content-Type', 'image/jpeg')
                 self.send_header('Cache-Control', 'no-store')
-                self.send_header('Access-Control-Allow-Origin', '*')
+                self._cors()
                 self.send_header('Content-Length', str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
@@ -453,9 +500,17 @@ def make_handler(bridge):
                 self._send(404, {'error': 'not found'})
 
         def do_POST(self):
+            if not self._access():
+                return
+            if self.headers.get_content_type() != 'application/json':
+                return self._send(415, {'error': 'application/json required'})
             try:
                 n = int(self.headers.get('Content-Length', '0'))
-                body = json.loads(self.rfile.read(min(n, 4_000_000)) or b'{}')
+                if not 0 <= n <= 4_000_000:
+                    return self._send(413, {'error': 'request too large'})
+                body = json.loads(self.rfile.read(n) or b'{}')
+                if not isinstance(body, dict):
+                    return self._send(400, {'error': 'JSON object required'})
                 if self.path.startswith('/say'):
                     return self._send(200, bridge.say(str(body.get('text', ''))[:500]))
                 if self.path.startswith('/tts'):
@@ -464,7 +519,7 @@ def make_handler(bridge):
                         return self._send(503, {'error': 'voice unavailable'})
                     self.send_response(200)
                     self.send_header('Content-Type', 'audio/mpeg')
-                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self._cors()
                     self.send_header('Content-Length', str(len(audio)))
                     self.end_headers()
                     self.wfile.write(audio)

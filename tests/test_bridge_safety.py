@@ -117,3 +117,25 @@ class BridgeSafetyTests(unittest.TestCase):
             camera.VideoCapture.assert_not_called()
             thread.assert_not_called()
             self.assertEqual(eye.error, 'camera disabled')
+
+
+    def test_http_rejects_untrusted_origin_and_host_before_dispatch(self):
+        bridge = self.bridge()
+        server = ThreadingHTTPServer(('127.0.0.1', 0), kevin_bridge.make_handler(bridge))
+        worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
+        def request(origin=None, host=None, method='POST'):
+            connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=2)
+            headers = {'Content-Type': 'application/json'}
+            if origin: headers['Origin'] = origin
+            if host: headers['Host'] = host
+            connection.request(method, '/stop', '{}', headers)
+            response = connection.getresponse(); status = response.status; cors = response.getheader('Access-Control-Allow-Origin')
+            response.read(); connection.close(); return status, cors
+        try:
+            self.assertEqual(request('https://evil.example')[0], 403)
+            self.assertEqual(request(host='evil.example')[0], 403)
+            bridge.c.stop.assert_not_called()
+            self.assertEqual(request('https://sergiobuilds.github.io'), (200, 'https://sergiobuilds.github.io'))
+            self.assertEqual(request()[0], 200)
+        finally:
+            server.shutdown(); server.server_close(); worker.join(2)
