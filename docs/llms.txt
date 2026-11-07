@@ -1,0 +1,12 @@
+# KEVIN
+
+> A prototype execution layer connecting supported physical devices to AI agents, with device responses and observed changes recorded separately.
+
+## Product and source
+- [Product landing](https://sergiobuilds.github.io/kevin/landing/): Korean product description, illustrative workflows and architecture.
+- [Technical evidence](https://github.com/sergiobuilds/kevin/blob/codex/kevin-landing-evidence/docs/TECHNICAL_EVIDENCE.md): Evidence scopes and reproduction steps.
+- [Source repository](https://github.com/sergiobuilds/kevin): MIT-licensed source, protocol demos and tests.
+- [Detailed text summary](https://sergiobuilds.github.io/kevin/landing/llms.txt): Engineering sources and limitations.
+- [Capability evidence](https://sergiobuilds.github.io/kevin/landing/evidence.json): Explicit status, provenance and source links.
+
+The live character app and the static landing page are separate experiences. LED physical operation and home radio listening have maintainer/user-reported history. Extension demos use loopback protocol peers rather than physical consumer devices. Signed receipts establish integrity of bundled records, not semantic task success or authenticated sensor capture.

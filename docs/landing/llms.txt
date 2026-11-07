@@ -1,0 +1,21 @@
+# KEVIN
+
+> KEVIN is a prototype execution layer that exposes supported physical devices as AI tools and separates device acknowledgements from observed changes.
+
+The landing page and this document describe the same project. Capabilities are classified by evidence scope rather than implied universal support.
+
+## Project
+- [Landing page](https://sergiobuilds.github.io/kevin/landing/): Product, illustrative workflows, architecture and verification scope.
+- [Source repository](https://github.com/sergiobuilds/kevin): MIT-licensed Python and JavaScript source.
+- [Technical evidence](https://github.com/sergiobuilds/kevin/blob/codex/kevin-landing-evidence/docs/TECHNICAL_EVIDENCE.md): Claim-to-source mapping, limitations and reproduction instructions.
+- [Capability evidence](./evidence.json): Machine-readable status and source links, snapshot 2026-11-07 at ab0a856.
+
+## Engineering
+- [Receipt implementation](https://github.com/sergiobuilds/kevin/blob/ab0a856/src/receipt.py): SHA-256 image hashes, canonical JSON and Ed25519 signatures; visual-change heuristics with explicit observation provenance.
+- [MCP server](https://github.com/sergiobuilds/kevin/blob/ab0a856/src/kevin_mcp.py): stdio JSON-RPC device tools and cancellation-aware camera receipt path.
+- [Controller](https://github.com/sergiobuilds/kevin/blob/ab0a856/src/show_control.py): Allowed plans, separated device actions, preview/applied state and cancellation.
+- [Web agent](https://github.com/sergiobuilds/kevin/blob/ab0a856/src/kevin_agent.py): Short conversation context, structured actions and rule-based rock-paper-scissors adjudication.
+- [Protocol demonstrations](https://github.com/sergiobuilds/kevin/blob/ab0a856/docs/HACKATHON_DEMO.md): WLED, HA API subset, ADB, Broadlink and Valetudo API subset against loopback peers.
+
+## Evidence scope
+LED physical operation and home radio listening have maintainer/user-reported history. Receipt tests use synthetic images and camera mocks: 21 tests rerun and passed on 2026-11-07. Extension protocol demos are not consumer-hardware validation. Signatures protect record integrity, not semantic success, trusted sensor capture or externally authenticated signer identity. The existing web bridge and MCP receipt path are distinct integration paths. Landing illustrations do not issue real device commands.

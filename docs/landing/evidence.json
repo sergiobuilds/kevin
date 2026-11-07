@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "project": "KEVIN",
+  "snapshot_date": "2026-11-07",
+  "source_commit": "ab0a856",
+  "repository": "https://github.com/sergiobuilds/kevin",
+  "license": "MIT",
+  "summary": "기존 기기를 AI 도구로 연결하고 기기 응답과 관측 결과를 분리하는 실물 실행 계층 프로토타입입니다.",
+  "status_definitions": {
+    "physical_history": "운영자·사용자의 실물 동작 확인 이력. 이번 페이지의 독립 재측정이 아닙니다.",
+    "tested_with_synthetic_inputs": "이번 작성에서 합성·모의 입력으로 재실행한 테스트입니다.",
+    "implemented_with_test_sources": "코드와 테스트 소스를 확인했으며 이번 작성에서 해당 전체 테스트를 재실행하지 않았습니다.",
+    "loopback_protocol": "실제 클라이언트 또는 공개 API 형식과 로컬 테스트 상대를 연결합니다. 실물 검증이 아닙니다.",
+    "implemented": "코드를 확인했으며 해당 사용자 시나리오의 실물 재검증을 뜻하지 않습니다."
+  },
+  "verification": {
+    "command": "PYTHONPATH=src python3 -m unittest discover -s tests -p test_receipt.py -v",
+    "date": "2026-11-07",
+    "tests_run": 21,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "receipt observation, camera mocks, signed bundle integrity; not physical hardware or model evaluation"
+  },
+  "capabilities": [
+    {
+      "id": "led",
+      "capability": "144×16 LED 전광판 장면·문구·점수 제어",
+      "status": "physical_history",
+      "evidence_kind": "maintainer_field_report",
+      "claim": "실물 BLE 전송·애니메이션 동작 이력이 있습니다. 최신 코드 모든 기능의 현장 재검증을 뜻하지 않습니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/show_transport.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/kevin_agent.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/README.md"
+      ],
+      "limits": [
+        "장면 GIF는 생성 프레임이며 현장 촬영본이 아닙니다.",
+        "전송 ACK와 눈으로 확인한 표시 결과를 구분합니다."
+      ]
+    },
+    {
+      "id": "radio",
+      "capability": "Windows Bluetooth 라디오 재생·정지·음량",
+      "status": "physical_history",
+      "evidence_kind": "maintainer_field_report",
+      "claim": "집에서 CRF-35B 캐럴 청취를 확인한 이력이 있습니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/show_control.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/radio_player.ps1",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_radio_volume.py"
+      ],
+      "limits": [
+        "행사장 출력 장치 연결은 별도 확인이 필요합니다.",
+        "영상 변화와 오디오 청취 성공은 독립적입니다."
+      ]
+    },
+    {
+      "id": "receipt",
+      "capability": "관측 기록·사진 해시·Ed25519 서명 검증",
+      "status": "tested_with_synthetic_inputs",
+      "evidence_kind": "rerun_unit_tests",
+      "claim": "관측·서명 관련 기존 21개 테스트를 2026-11-07 재실행해 모두 통과했습니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/receipt.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_receipt.py"
+      ],
+      "limits": [
+        "합성·모의 입력 검사이며 현장 실물 성공률이 아닙니다.",
+        "픽셀 변화는 작업 의미의 달성을 보증하지 않습니다.",
+        "내장 공개키의 서명 확인만으로 서명자의 신원을 인증하지 않습니다."
+      ]
+    },
+    {
+      "id": "control",
+      "capability": "기기별 동작 분리·취소·미리보기 상태 분리",
+      "status": "implemented_with_test_sources",
+      "evidence_kind": "source_inspection",
+      "claim": "LED 변경 때 음악을 재시작하지 않는 경로와 취소·상태 분리 검사가 소스에 있습니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/show_control.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/kevin_bridge.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_show_control.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_kevin_mcp.py"
+      ],
+      "limits": [
+        "웹 에이전트·기존 컨트롤러·MCP는 서로 다른 진입 경로입니다. 모든 웹 요청에 영수증이 붙는다고 주장하지 않습니다."
+      ]
+    },
+    {
+      "id": "wled",
+      "capability": "WLED 구역 제어·상태 재조회",
+      "status": "loopback_protocol",
+      "evidence_kind": "merged_protocol_demo",
+      "claim": "실제 python-wled 클라이언트와 loopback HTTP 테스트 상대를 연결하는 구현입니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/devices/light.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_device_light.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/docs/HACKATHON_DEMO.md"
+      ],
+      "limits": [
+        "WLED 펌웨어나 실물 조명 검증이 아닙니다.",
+        "합성 관측 source=simulation과 physically_verified=false를 유지합니다."
+      ]
+    },
+    {
+      "id": "wallpad",
+      "capability": "Home Assistant 지정 조명 채널",
+      "status": "loopback_protocol",
+      "evidence_kind": "merged_protocol_demo",
+      "claim": "설정한 entity만 조작하고 상태 재조회와 다른 채널 보존을 확인하는 API 부분 구현입니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/devices/wallpad.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_device_wallpad.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/docs/TRACKS_04_07.md"
+      ],
+      "limits": [
+        "실제 HA 서버·RS485 월패드 검증이 아닙니다.",
+        "확장 트랙 자연어 자동 선택은 아직 연결하지 않았습니다."
+      ]
+    },
+    {
+      "id": "tv",
+      "capability": "ADB 앱 전환·기존 앱 복귀",
+      "status": "loopback_protocol",
+      "evidence_kind": "merged_protocol_demo",
+      "claim": "실제 adb-shell 클라이언트가 loopback TCP 프로토콜 상대와 통신합니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/devices/tv.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_device_tv.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/docs/TRACK_05_TV.md"
+      ],
+      "limits": [
+        "Android OS·실물 TV·재생 위치 복원 검증이 아닙니다."
+      ]
+    },
+    {
+      "id": "ir",
+      "capability": "Broadlink 학습·송신·정지 시도",
+      "status": "loopback_protocol",
+      "evidence_kind": "merged_protocol_demo",
+      "claim": "실제 python-broadlink 인증·AES·UDP와 합성 학습 코드를 사용합니다. 출발에는 별도 정지 코드가 필요합니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/devices/ir.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_device_ir.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/docs/TRACK_06_IR.md"
+      ],
+      "limits": [
+        "실제 리모컨 펄스·기차 이동 검증이 아닙니다.",
+        "허브 응답도 sent_unverified로 유지하며 모터 정지를 보증하지 않습니다."
+      ]
+    },
+    {
+      "id": "vacuum",
+      "capability": "Valetudo 지정 구역 청소 요청·일시정지",
+      "status": "loopback_protocol",
+      "evidence_kind": "merged_protocol_demo",
+      "claim": "Valetudo API 부분 구현과 loopback 테스트 상대를 사용합니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/devices/vacuum.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/tests/test_device_vacuum.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/docs/TRACKS_04_07.md"
+      ],
+      "limits": [
+        "실물 청소기·영상 오염 감지·청소 완료 검증이 아닙니다."
+      ]
+    },
+    {
+      "id": "agent",
+      "capability": "짧은 대화 기억·자유 문구·멜로디·게임",
+      "status": "implemented",
+      "evidence_kind": "source_inspection",
+      "claim": "최근 대화와 기기 상태를 구조화 입력으로 전달하고 가위바위보 승패·점수는 Python 규칙으로 처리합니다.",
+      "sources": [
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/kevin_agent.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/song.py",
+        "https://github.com/sergiobuilds/kevin/blob/ab0a856/src/kevin_bridge.py"
+      ],
+      "limits": [
+        "장기 기억·모든 노래의 정확한 재현·공정성 인증을 뜻하지 않습니다.",
+        "이 문서 작성 중 유료 모델 API를 새로 호출하지 않았습니다."
+      ]
+    }
+  ],
+  "limitations": [
+    "서명은 무결성 검증이며 실제 세계의 진실·서명자 신원·의미적 성공을 보증하지 않습니다.",
+    "현재 웹 브리지와 MCP 영수증 경로의 통합 범위는 다릅니다.",
+    "04–07 확장 트랙의 자연어 자동 라우팅은 미연결입니다.",
+    "공식 심사 점수·수상·고객 매출을 입증하는 자료는 없습니다."
+  ]
+}
