@@ -271,6 +271,8 @@ class ShowController:
                     self.radio.stop()
                 except Exception:
                     pass
+                with self.lock:  # don't make every later request fail on the same missing radio
+                    self.state['recipe']['music'] = 'stop'
             messages = {
                 'planning': '어, 지금 머리가 잘 안 돌아가. AI 연결을 한번 봐줄래?',
                 'rendering': '그 장면은 못 그리겠어. 다르게 말해줄래?',
