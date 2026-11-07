@@ -55,6 +55,23 @@ flowchart LR
 
 연결 하나를 만들면 **같은 기기를 가진 모든 사람과, MCP를 쓰는 모든 에이전트가** 다시 씁니다. 기기 종류가 늘수록 에이전트가 할 수 있는 일이 늘어납니다. KEVIN은 앱 하나가 아니라, 에이전트가 물리 세계로 나가는 길목에 놓이는 계층입니다.
 
+## 시키지 않아도, 케빈이 스스로
+
+케빈은 웹캠으로 방을 보고 1초마다 스스로 판단합니다. 기기 안의 작은 AI가 상황을 추론해 무엇을 할지 고르고, 규칙이 마지막으로 확인해 엉뚱한 경보나 꺼짐은 막습니다.
+
+| 모드 | 케빈이 보는 것 | 케빈이 하는 일 |
+|---|---|---|
+| 🏠 집을 비웠을 때 (\`--mode away\`) | 사람이나 큰 움직임이 두 번 연속 잡힘 | 「나 홀로 집에」처럼: 전광판에 빨간 “누구야?! · 경찰 신고” 경고, 라디오 최대 음량, 케빈 목소리로 “누구세요? 지금 경찰에 신고했어요!” 그리고 실행 전후 사진이 담긴 실물 실행 증명을 남김 |
+| 💡 집에 있을 때 (\`--mode home\`) | 정한 시간 동안 아무도 안 보임 | “한동안 아무도 없어서 전광판이랑 라디오 껐어.” 켜진 기기를 스스로 끔 |
+| 🔥 가스·전기 (로드맵 11) | 외출 중 켜진 가스레인지·멀티탭 | 가스 밸브 잠금, 멀티탭 차단. 판단과 연결 지점은 같고, 잠금 장치 연결은 진행 중 |
+
+<p align="center"><img src="docs/intruder-scene.png" alt="전광판 침입 경고 장면 4프레임" width="70%"></p>
+
+\`\`\`sh
+python src/guardian.py --mode away              # 집을 비웠을 때
+python src/guardian.py --mode home --idle 300   # 5분 동안 아무도 없으면 끄기
+\`\`\`
+
 ## 시연
 
 <table><tr><td><img src="docs/terminal-room.png" alt="도트 그래픽 방을 걷는 AI 캐릭터"></td><td><img src="docs/terminal-talk.png" alt="말을 걸면 캐릭터가 크게 다가와 요청을 받는 화면"></td></tr><tr><td align="center"><sub>방을 서성이는 케빈</sub></td><td align="center"><sub>말을 걸면 다가와 듣는다</sub></td></tr></table>
@@ -147,7 +164,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 ## 로드맵 — 열 가지 기기를 도구로
 
-같은 세 층으로 10개 기기 트랙을 팀원이 동시에 엽니다. 트랙별 시연, 출발점 오픈소스, 완료 기준은 [ROADMAP.md](ROADMAP.md)와 [이슈](https://github.com/sergiobuilds/kevin/issues?q=label%3Aroadmap)에 있습니다.
+같은 세 층으로 11개 기기 트랙을 팀원이 동시에 엽니다. 트랙별 시연, 출발점 오픈소스, 완료 기준은 [ROADMAP.md](ROADMAP.md)와 [이슈](https://github.com/sergiobuilds/kevin/issues?q=label%3Aroadmap)에 있습니다.
 
 | # | 기기 | 에이전트가 할 수 있게 되는 일 |
 |---|---|---|
@@ -161,6 +178,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 | 08 | 방범·현관 | 어두우면 불을 켜고 다시 보기 |
 | 09 | 서비스 끝난 기기 | 서버가 사라진 기기 되살리기 |
 | 10 | 모르는 통신법 | 설명서 없는 기기의 명령 뜻을 관찰로 배우기 |
+| 11 | 가스·전기 차단 | 외출 중 켜진 가스·전기를 스스로 판단해 잠그고 끄기 |
 
 ## 사업성
 
