@@ -183,13 +183,34 @@ def make_handler(bridge):
             self.send_header('Access-Control-Allow-Private-Network', 'true')
             self.end_headers()
 
+        def _static(self):
+            root = Path(__file__).resolve().parent.parent / 'docs' / 'app'
+            rel = self.path.split('?', 1)[0].lstrip('/') or 'index.html'
+            if rel in ('app', 'app/'):
+                rel = 'index.html'
+            rel = rel.removeprefix('app/')
+            target = (root / rel).resolve()
+            if not target.is_relative_to(root) or not target.is_file():
+                return False
+            body = target.read_bytes()
+            ctype = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+                     '.css': 'text/css; charset=utf-8', '.png': 'image/png'}.get(target.suffix, 'application/octet-stream')
+            self.send_response(200)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(body)
+            return True
+
         def do_GET(self):
             if self.path.startswith('/health'):
                 return self._send(200, bridge.health())
             if self.path.startswith('/state'):
                 s = bridge.c.get_state()
                 return self._send(200, {k: s.get(k) for k in ('status', 'message', 'recipe', 'transport', 'radio')})
-            self._send(404, {'error': 'not found'})
+            if not self._static():
+                self._send(404, {'error': 'not found'})
 
         def do_POST(self):
             try:
