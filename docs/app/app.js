@@ -267,4 +267,6 @@ setInterval(() => { $('clock').textContent = new Date().toTimeString().slice(0, 
 setInterval(health, 5000);
 health(); startCam().then(watch); requestAnimationFrame(draw);
 say('안녕, 난 케빈이야. 이 집은 내가 맡을게. 말 걸어줘.', { speak: false });
+if (params.get('view') === 'talk') { state.view = 'talk'; say(params.get('line') || '좋아, 산타 날리고 눈 펑펑 내리게 할게!', { speak: false }); }
+if (params.get('view') === 'alert') { state.mode = 'away'; state.view = 'talk'; $('alert').hidden = false; say('누구세요? 지금 경찰에 신고했어요!', { speak: false }); }
 $('text').focus();
