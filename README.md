@@ -74,6 +74,21 @@ python src/guardian.py --mode home --idle 300   # 5분 동안 아무도 없으�
 
 ## 시연
 
+### 사용 예시 · 케빈이 하려는 일
+
+<table><tr>
+<td width="62%"><img src="docs/ref/home-alone.gif" alt="「나 홀로 집에」 파티 장면"></td>
+<td width="38%"><img src="docs/ref/led-curtain-app.gif" alt="휴대폰 앱으로 LED 커튼 그림을 고르는 장면"></td>
+</tr><tr>
+<td align="center"><sub>「나 홀로 집에」(1990) · 인형 · 장난감 기차 · 전축으로 혼자 집 전체 연출</sub></td>
+<td align="center"><sub>요즘의 연출 · 기기마다 앱 · 손가락으로 정해진 그림 선택</sub></td>
+</tr></table>
+
+KEVIN은 이 두 장면 사이를 메웁니다. 앱 대신 말 한마디로, 새로 산 기기 대신 집에 있던 기기로.
+<sub>참고 영상: [youtu.be/xOIHA3SSCvM](https://youtu.be/xOIHA3SSCvM) · [instagram.com/reel/Dd8vXumP7DU](https://www.instagram.com/reel/Dd8vXumP7DU/) · 사용 예시 참고용 발췌</sub>
+
+### 실제 화면
+
 <table><tr><td><img src="docs/terminal-room.png" alt="도트 그래픽 방을 걷는 AI 캐릭터"></td><td><img src="docs/terminal-talk.png" alt="말을 걸면 캐릭터가 크게 다가와 요청을 받는 화면"></td></tr><tr><td align="center"><sub>방을 서성이는 케빈</sub></td><td align="center"><sub>말을 걸면 다가와 듣는다</sub></td></tr></table>
 
 1. 터미널에서 `kevin --live`. 90년대 도스 게임 같은 컬러 도트 방에서 케빈이 서성입니다.
