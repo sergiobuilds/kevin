@@ -25,6 +25,12 @@ DEFAULT_RECIPE = dict(preset='christmas_train', speed=1, snow='normal', sky=None
 
 
 def interpret(prompt, recipe, config):
+    provider = config.get('KEVIN_PLANNER', 'ollama')
+    if provider == 'openai':
+        module = importlib.import_module('openai_planner')
+        return module.interpret(prompt, recipe, config)
+    if provider != 'ollama':
+        raise ShowError('KEVIN_PLANNER must be ollama or openai')
     module = importlib.import_module('show_intent')
     return module.interpret(prompt, recipe, endpoint=config.get('KEVIN_OLLAMA_URL'),
                             model=config.get('KEVIN_OLLAMA_MODEL'))

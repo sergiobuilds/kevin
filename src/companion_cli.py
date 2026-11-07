@@ -84,10 +84,12 @@ def read_key():
 class Backend:
     """In-process show controller. Real devices are touched only with --live."""
 
-    def __init__(self, live=False):
+    def __init__(self, live=False, planner=None):
         from show_control import ShowController
         config = dict(os.environ)
         config['KEVIN_SHOW_LIVE'] = '1' if live else '0'
+        if planner is not None:
+            config['KEVIN_PLANNER'] = planner
         self.live = live
         self.local = ShowController(config=config)
 
@@ -307,10 +309,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='터미널 안에서 실행되는 컬러 AI 게임')
     parser.add_argument('--live', action='store_true',
                         help='실제 LED 전광판과 블루투스 라디오로 내보냅니다. 없으면 미리보기만 합니다.')
+    parser.add_argument('--planner', choices=('ollama', 'openai'),
+                        help='계획 모델 선택. 기본 Ollama; openai는 API 키가 필요합니다.')
     args = parser.parse_args(argv)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         parser.error('실제 터미널에서 실행해 주세요. 브라우저는 사용하지 않습니다.')
-    backend = Backend(args.live)
+    backend = Backend(args.live, planner=args.planner)
     game = Game(backend)
     try:
         with terminal_session():

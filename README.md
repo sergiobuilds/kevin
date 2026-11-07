@@ -134,6 +134,32 @@ $env:KEVIN_CAMERA_ROI   = "x,y,w,h"      # 카메라 화면 속 기기 위치 (�
 | Ctrl+L | 미리보기 ↔ 실물 전환 |
 | Esc | 모든 기기 정지 |
 
+## 선택 옵션: OpenAI Luna
+
+기본은 기존 로컬 Ollama입니다. `OPENAI_API_KEY`를 실행 환경에 설정한 뒤 명시적으로 선택하면
+OpenAI API의 `gpt-6-luna`가 같은 연출 계획을 만듭니다. 추가 Python 패키지는 필요 없습니다.
+
+```sh
+./kevin --planner openai
+# Windows: .\kevin.cmd --planner openai
+```
+
+`KEVIN_PLANNER=openai` 환경변수로도 선택할 수 있어 MCP의 `say`에도 적용됩니다.
+CLI의 `--planner`가 환경변수보다 우선하며, 키가 있다는 이유로 자동 전환하지 않습니다.
+선택 설정은 `KEVIN_OPENAI_MODEL`(기본 `gpt-6-luna`),
+`KEVIN_OPENAI_TIMEOUT`(기본 30초, 최대 120초)입니다.
+모델 선택은 실물 실행 선택과 독립적입니다. `--live`와 기존 장비 설정은 그대로 필요합니다.
+
+OpenAI를 선택하면 요청 텍스트와 현재 연출 설정이 외부 API로 전송됩니다.
+키·장비 주소·음성 파일은 계획 본문에 넣지 않습니다. API 키는 프로세스 환경에만 두고 커밋하지 마세요.
+Responses API에 `store:false`를 보내지만 기본 모니터링 로그까지 비활성화하는 옵션은 아닙니다.
+API 키 오류·거절·시간 초과·불완전한 계획에는 실행하지 않으며 다른 모델로 자동 재시도하지 않습니다.
+Luna 응답은 로컬 스키마 검증을 거쳐 기존 컨트롤러로 전달합니다.
+
+참고: [Luna 모델](https://developers.openai.com/api/docs/models/gpt-6-luna),
+[구조화 출력](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses),
+[API 데이터 정책](https://developers.openai.com/api/docs/guides/your-data).
+
 ## 사용한 오픈소스와 기술
 
 | 영역 | 사용 기술 |
