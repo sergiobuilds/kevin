@@ -107,6 +107,21 @@ python src/receipt.py .runtime/receipts/<id>
 
 ## 실행
 
+장비 없이 **조명·월패드·TV·IR·청소기의 통신과 상태 재조회**를 확인하는 확장 데모:
+
+```sh
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements-demo.txt
+.venv/bin/python src/demo_server.py
+# http://127.0.0.1:8790
+```
+
+세 구역 중 하나만 바꾸기, 어두움→조명→재관찰, 응답 무시·오래된 영상·켜졌지만 여전히 어두운 상황을 직접 실행합니다. 장치와 영상은 가상이며, 실제 `python-wled==1.1.1` 호출·전후 이미지·서명 검증을 사용합니다. 실물 연결 결과와 구분합니다. [시연 순서·실물 연결·재사용 출처](docs/HACKATHON_DEMO.md).
+
+같은 화면 아래의 **04–07**에서 월패드 한 채널 제어, TV 앱 저장·전환·복귀, 적외선 코드 학습·전송, 청소기 지정 구역 시작·일시정지를 실행합니다. TV·IR은 실제 `adb-shell==0.4.4`와 `broadlink==0.19.0`이 loopback TCP/UDP 상대와 통신합니다. 월패드·청소기는 HA·Valetudo의 공개 HTTP API 일부를 구현한 가상 상대를 사용합니다. 모든 확장 결과는 `physically_verified=false`이며, TV 재생 위치 복원·실제 기차 코드·카메라 기반 오염 판단은 포함하지 않습니다.
+
+04–07 도구만 MCP로 실행하려면 `.venv/bin/python src/device_demo_mcp.py`를 stdio 서버로 등록합니다. 이 진입점은 카메라·기존 실물 LED·라디오 설정을 사용하지 않습니다.
+
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt

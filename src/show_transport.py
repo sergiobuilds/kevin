@@ -6,6 +6,7 @@ from importlib.metadata import version
 import inspect
 import io
 import json
+import math
 from pathlib import Path
 import queue
 import subprocess
@@ -272,6 +273,16 @@ class RadioPlayer:
         result = self._request('play', cancel=cancel, timeout=18, volume=volume)
         check_cancel(cancel)
         return result
+
+    def set_volume(self, volume, cancel):
+        """Adjust the owned player without starting or resuming playback."""
+        if type(volume) not in (int, float) or not math.isfinite(volume) or not 0 <= volume <= 100:
+            raise TransportError('volume must be 0..100')
+        check_cancel(cancel)
+        result = self._request('volume', cancel=cancel, volume=volume)
+        check_cancel(cancel)
+        return dict(result, requested_volume=volume,
+                    volume_applied=result.get('volume_applied', result.get('volume') == volume))
 
     def _terminate(self, process):
         if process is None:

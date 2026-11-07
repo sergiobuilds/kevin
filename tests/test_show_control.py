@@ -62,6 +62,13 @@ class FakeRadio:
         self.state = {'status': 'stopped', 'audible_verified': False}
         return self.state.copy()
 
+    def set_volume(self, volume, cancel):
+        if cancel.is_set():
+            raise Cancelled()
+        self.calls.append(('volume', volume))
+        self.state['volume'] = volume
+        return self.state.copy()
+
     def status(self):
         return self.state.copy()
 
@@ -111,7 +118,7 @@ class ControllerTests(unittest.TestCase):
         self.assertFalse(state['transport']['physical_verified'])
 
     def test_live_applies_led_before_radio_and_keeps_actual_state(self):
-        controller = self.controller(planner=lambda *_: plan(mode='start', music='play', volume=37))
+        controller = self.controller(planner=lambda *_: plan(mode='start', preset='christmas_train', music='play', volume=37))
         controller._prepare_audio = lambda cancel: None
         original = self.radio.play
         def play_after_ack(volume, cancel):
@@ -142,7 +149,7 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(len(self.transport.calls), 2)
 
     def test_manual_send_invalidates_cache_and_rejects_active_show(self):
-        controller = self.controller()
+        controller = self.controller(planner=lambda *_: plan(preset='christmas_train'))
         controller.command('A', True)
         self.assertEqual(finished(controller)['status'], 'complete')
         controller.send_manual_scene(small_scene(), 'test-only-target', True)
@@ -158,7 +165,7 @@ class ControllerTests(unittest.TestCase):
     def test_failed_geometry_or_ack_never_starts_music(self):
         for failure in ('geometry', 'ack'):
             with self.subTest(failure=failure):
-                controller = self.controller(planner=lambda *_: plan(music='play'))
+                controller = self.controller(planner=lambda *_: plan(preset='christmas_train', music='play'))
                 self.transport.send = Mock(side_effect=TransportError(failure))
                 controller.command('시작', True)
                 state = finished(controller)
@@ -219,7 +226,7 @@ class ControllerTests(unittest.TestCase):
             cancel.wait(1)
             raise Cancelled()
         self.transport.send = send
-        controller = self.controller(planner=lambda *_: plan(music='play'))
+        controller = self.controller(planner=lambda *_: plan(preset='christmas_train', music='play'))
         controller.command('시작', True)
         self.assertTrue(entered.wait(1))
         controller.stop()
@@ -249,7 +256,7 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(renderer.call_count, 1)
 
     def test_music_only_keeps_acknowledged_scene_without_resending(self):
-        specs = iter([plan(), plan(music='play')])
+        specs = iter([plan(preset='christmas_train'), plan(music='play')])
         controller = self.controller(planner=lambda *_: next(specs))
         controller._prepare_audio = lambda cancel: None
         controller.command('기차', True)
@@ -268,6 +275,132 @@ class ControllerTests(unittest.TestCase):
             controller._prepare_audio(threading.Event())
             self.assertEqual(synthesize.call_count, 1)
         self.assertEqual((Path(self.temp.name) / 'jingle_bells.wav').stat().st_mtime_ns, first)
+
+    def test_radio_only_on_first_command_does_not_render_or_send_led(self):
+        renderer = Mock(side_effect=AssertionError('radio must not render an LED scene'))
+        controller = self.controller(planner=lambda *_: plan(music='play'), renderer=renderer)
+        controller._prepare_audio = lambda cancel: None
+        controller.command('캐럴만 틀어줘', True)
+        state = finished(controller)
+        self.assertEqual(state['status'], 'complete')
+        self.assertEqual(self.radio.calls, [('play', 45)])
+        self.assertEqual(self.transport.calls, [])
+        self.assertNotIn('scene', state)
+
+    def test_led_edit_does_not_restart_or_resume_existing_music(self):
+        specs = iter([plan(music='play'), plan(sky='#445566')])
+        controller = self.controller(planner=lambda *_: next(specs))
+        controller._prepare_audio = lambda cancel: None
+        controller.command('캐럴 틀어줘', True)
+        self.assertEqual(finished(controller)['status'], 'complete')
+        self.radio.state['status'] = 'paused'  # externally paused playback
+        controller.command('하늘만 바꿔줘', True)
+        state = finished(controller)
+        self.assertEqual(state['status'], 'complete')
+        self.assertEqual(self.radio.calls, [('play', 45)])
+        self.assertEqual(state['radio']['status'], 'paused')
+        self.assertEqual(len(self.transport.calls), 1)
+
+    def test_volume_only_preserves_stopped_and_paused_playback(self):
+        for status in ('not_started', 'paused', 'playing'):
+            with self.subTest(status=status):
+                self.radio.calls.clear()
+                self.radio.state['status'] = status
+                controller = self.controller(planner=lambda *_: plan(volume=30))
+                controller._prepare_audio = Mock(side_effect=AssertionError('volume must not prepare audio'))
+                controller.command('볼륨만 30', True)
+                state = finished(controller)
+                self.assertEqual(state['status'], 'complete')
+                self.assertEqual(state['radio']['status'], status)
+                self.assertEqual(self.radio.calls, [('volume', 30)])
+                self.assertEqual(self.transport.calls, [])
+
+    def test_failed_volume_change_does_not_stop_playback(self):
+        self.radio.state['status'] = 'playing'
+        self.radio.set_volume = Mock(side_effect=TransportError('volume failed'))
+        controller = self.controller(planner=lambda *_: plan(volume=30))
+        controller.command('볼륨만 30', True)
+        state = finished(controller)
+        self.assertEqual(state['status'], 'error')
+        self.assertEqual(self.radio.calls, [])
+        self.assertEqual(state['applied_recipe']['volume'], 45)
+        self.assertNotIn('전광판은 바꿨', state['message'])
+
+    def test_preview_music_never_leaks_into_later_live_visual_edit(self):
+        seen = []
+        specs = iter([plan(music='play', volume=20, sky='#112233'), plan(speed=1.5)])
+        def planner(prompt, recipe):
+            seen.append(copy.deepcopy(recipe))
+            return next(specs)
+        controller = self.controller(planner=planner)
+        controller.command('음악과 하늘 미리보기', False)
+        preview = finished(controller)
+        self.assertEqual(preview['recipe']['music'], 'play')
+        self.assertEqual(preview['applied_recipe']['music'], 'stop')
+        controller.command('속도만 바꿔줘', True)
+        live = finished(controller)
+        self.assertEqual(live['status'], 'complete')
+        self.assertEqual(seen[1]['music'], 'stop')
+        self.assertEqual(seen[1]['volume'], 45)
+        self.assertIsNone(seen[1]['sky'])
+        self.assertEqual(live['recipe']['music'], 'stop')
+        self.assertEqual(self.radio.calls, [])
+        self.assertEqual(len(self.transport.calls), 1)
+
+    def test_preview_after_live_starts_from_applied_state(self):
+        specs = iter([plan(sky='#112233'), plan(sky='#445566'), plan(speed=1.5)])
+        controller = self.controller(planner=lambda *_: next(specs))
+        controller.command('첫 미리보기', False)
+        finished(controller)
+        controller.command('실물 변경', True)
+        finished(controller)
+        controller.command('새 미리보기', False)
+        state = finished(controller)
+        self.assertEqual(state['recipe']['sky'], '#445566')
+        self.assertEqual(state['applied_recipe']['speed'], 1)
+        self.assertEqual(state['recipe']['speed'], 1.5)
+
+    def test_single_device_configuration_and_missing_target_preflight(self):
+        for device, good_plan, bad_plan in (
+            ('led', plan(sky='#445566'), plan(sky='#445566', music='play')),
+            ('radio', plan(music='play'), plan(sky='#445566', music='play')),
+        ):
+            with self.subTest(device=device):
+                self.transport.calls.clear()
+                self.radio.calls.clear()
+                config = dict(self.config)
+                config.pop('KEVIN_RADIO_DEVICE' if device == 'led' else 'KEVIN_LED_ADDRESS')
+                specs = iter([bad_plan, good_plan])
+                controller = self.controller(config=config, planner=lambda *_: next(specs))
+                controller._prepare_audio = lambda cancel: None
+                self.assertTrue(controller.live_configured)
+                controller.command('설정 없는 대상 포함', True)
+                self.assertEqual(finished(controller)['status'], 'error')
+                self.assertEqual((self.transport.calls, self.radio.calls), ([], []))
+                controller.command('연결된 기기만', True)
+                self.assertEqual(finished(controller)['status'], 'complete')
+                self.assertEqual(len(self.transport.calls), int(device == 'led'))
+                self.assertEqual(len(self.radio.calls), int(device == 'radio'))
+
+    def test_command_captures_temporary_planner_before_worker_starts(self):
+        controller = self.controller(planner=lambda *_: plan(sky='#112233'))
+        with patch('show_control.threading.Thread') as thread:
+            controller.command('직접 계획', False)
+        worker_args = thread.call_args.kwargs['args']
+        controller.planner = Mock(side_effect=AssertionError('replacement planner was used'))
+        controller._run(*worker_args)
+        self.assertEqual(controller.get_state()['recipe']['sky'], '#112233')
+
+    def test_partial_failure_keeps_only_successful_device_state(self):
+        controller = self.controller(planner=lambda *_: plan(sky='#112233', music='play', volume=20))
+        controller._prepare_audio = lambda cancel: None
+        self.radio.play = Mock(side_effect=TransportError('no output'))
+        controller.command('장면과 음악', True)
+        state = finished(controller)
+        self.assertEqual(state['status'], 'error')
+        self.assertEqual(state['applied_recipe']['sky'], '#112233')
+        self.assertEqual(state['applied_recipe']['music'], 'stop')
+        self.assertEqual(state['applied_recipe']['volume'], 45)
 
     def test_live_gate_and_busy_gate(self):
         controller = self.controller(config={})

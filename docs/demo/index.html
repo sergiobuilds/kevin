@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>KEVIN — 실행과 확인</title>
+  <link rel="stylesheet" href="/demo.css">
+</head>
+<body>
+  <header class="top"><a href="/" class="logo">KEVIN<span>▌</span></a><a class="edition" href="#extended">DEVICE LAB · 02 / 04–08 ↓</a><span class="connection" id="connection">연결 중</span></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">말이 끝난 뒤에도, 한 번 더 확인.</p><h1>불을 켰다고?<br><em>밝아졌는지 볼게.</em></h1><p class="description">가상 현관에서 조명을 제어하고, 돌아온 상태와 전후 장면을 확인합니다.</p></div><div class="source-card"><span class="source-label">가상 장치 시연</span><strong>실제 WLED 클라이언트 연결</strong><p>로컬 HTTP 요청과 상태 재조회가 실행됩니다.<br>장치와 카메라 장면은 시뮬레이션입니다.</p></div></section>
+    <div class="layout">
+      <div class="primary">
+        <section class="room-card" aria-label="가상 조명 상태">
+          <div class="section-top"><h2>작은 공간, 세 개의 구역</h2><span class="tag">STATE READBACK</span></div>
+          <div class="room"><div class="room-grid"></div><div class="wall-label">KEVIN / LOCAL ROOM</div><div id="zones" class="zones"></div></div>
+          <div class="room-bottom"><span>표시는 서버에서 읽은 상태를 따릅니다.</span><span id="request-count">HTTP 요청 0회</span></div>
+        </section>
+        <section class="panel scenario-panel"><div class="section-top"><h2>현관을 확인해 줘</h2><span class="tag">OBSERVE → ACT → OBSERVE</span></div>
+          <div class="scenarios">
+            <button data-scenario="dark"><span>01</span><strong>현관이 어두워</strong><small>켜고, 다시 확인</small></button>
+            <button data-scenario="already_bright"><span>02</span><strong>이미 충분히 밝아</strong><small>불필요한 명령 없음</small></button>
+            <button data-scenario="still_dark"><span>03</span><strong>켜졌는데 안 밝아</strong><small>응답과 관찰의 차이</small></button>
+            <button data-scenario="stale"><span>04</span><strong>오래된 카메라 화면</strong><small>새 관찰이 필요해</small></button>
+          </div>
+          <p class="hint">각 시나리오는 합성 장면을 준비한 뒤 실행합니다. 모든 구역을 초기화하지 않습니다.</p>
+        </section>
+        <section class="panel evidence-panel"><div class="section-top"><h2>케빈이 확인한 것</h2><span class="tag">SIMULATED OBSERVATION</span></div>
+          <div class="evidence"><figure><div class="image-box"><img id="before" alt="실행 전 합성 현관 장면" hidden><span class="placeholder">시나리오를 실행해 보세요</span></div><figcaption>BEFORE · 실행 전</figcaption></figure><figure><div class="image-box"><img id="after" alt="실행 후 합성 현관 장면" hidden><span class="placeholder">전후 장면이 여기에 남습니다</span></div><figcaption>AFTER · 실행 후</figcaption></figure></div>
+          <div class="receipt-line"><span id="receipt-status">아직 생성된 영수증이 없습니다.</span><a id="receipt-link" hidden target="_blank" rel="noopener">서명된 기록 보기 ↗</a></div>
+          <p class="hint">서명은 기록의 변경 여부를 검증합니다. 화면 변화 수치가 실물 동작이나 소리를 입증하지는 않습니다.</p>
+        </section>
+      </div>
+      <aside class="side">
+        <section class="panel control-panel"><div class="section-top"><h2>이 구역만 바꿔 줘</h2><span class="tag">02 · WLED</span></div>
+          <form id="light-form"><label for="segment">구역</label><select id="segment"><option value="0">현관</option><option value="1">진열대</option><option value="2">작업대</option></select>
+          <label class="slider-label" for="brightness">밝기 <output id="brightness-value">160 / 255</output></label><input id="brightness" type="range" min="0" max="255" value="160">
+          <label class="check"><input id="power" type="checkbox" checked> 조명 켜기</label><button class="primary-button" type="submit">이 구역만 적용 <span>↗</span></button></form>
+          <p class="hint">선택한 구역의 상태를 다시 읽고, 다른 구역이 그대로인지 비교합니다.</p>
+        </section>
+        <section class="panel outcome-panel" aria-live="polite"><div class="section-top"><h2>실행 결과</h2><span class="status-dot" id="status-dot"></span></div><p class="outcome" id="message">첫 번째 요청을 기다리고 있어.</p><div class="facts"><div><span>요청한 상태</span><b id="readback">—</b></div><div><span>다른 구역 보존</span><b id="preserved">—</b></div><div><span>근거</span><b>가상 장치 · 합성 영상</b></div></div></section>
+        <section class="panel failure-panel"><div class="section-top"><h2>실패도 직접 확인</h2></div><label class="check"><input id="fault" type="checkbox"> 장치가 명령을 무시하게 하기</label><p class="hint">응답은 오지만 실제 상태가 바뀌지 않는 상황입니다.</p><div class="actions"><button id="stop" class="stop-button">■ 실행 중단</button><button id="reset" class="quiet-button">초기화</button></div></section>
+        <details class="panel"><summary>실제 요청과 응답</summary><p class="hint">python-wled → 로컬 WLED API → 상태 재조회</p><pre id="trace">아직 요청이 없습니다.</pre></details>
+      </aside>
+    </div>
+    <section id="extended" class="extended" aria-label="04부터 07까지 장치 데모">
+      <div class="section-top"><h2>다른 장치도, 같은 방식으로</h2><span class="tag">04–07 · LOOPBACK SIMULATION</span></div>
+      <p class="description">버튼을 누르면 로컬 가상 장치에 실제 통신 요청을 보냅니다. 실물 장치와 제조사 앱은 연결하지 않습니다.</p>
+      <div class="track-grid">
+        <section class="panel track" data-device="wallpad"><span class="source-label">04 · 월패드 조명</span><h3>거실 1번 등만 켜 줘</h3><p>Home Assistant REST 경로로 지정 채널을 바꾸고 다른 등 상태를 비교합니다. RS485 실물 연결은 별도입니다.</p>
+          <div class="track-actions"><button data-plan='{"channel":"living_1","on":true}'>1번 등 켜기</button><button data-plan='{"channel":"living_1","on":false}'>1번 등 끄기</button></div>
+          <label>가상 응답 <select data-track-fault><option value="none">정상</option><option value="ignore">명령 무시</option><option value="stale">오래된 상태</option><option value="timeout">응답 시간 초과</option></select></label><p class="track-outcome" aria-live="polite">첫 요청을 기다리고 있어요.</p><details><summary>상태와 통신 기록</summary><pre class="track-data">아직 요청이 없습니다.</pre></details>
+        </section>
+        <section class="panel track" data-device="tv"><span class="source-label">05 · Android TV</span><h3>아까 보던 앱으로 돌아가 줘</h3><p>adb-shell로 현재 앱을 저장하고 다른 앱을 연 뒤 복귀합니다. 영상의 재생 위치는 복원하지 않습니다.</p>
+          <div class="track-actions"><button data-plan='{"action":"snapshot"}'>현재 앱 저장</button><button data-plan='{"action":"launch","app":"youtube"}'>YouTube 열기</button><button data-plan='{"action":"restore"}'>저장한 앱 복귀</button></div>
+          <label>가상 응답 <select data-track-fault><option value="none">정상</option><option value="ignore">전환 무시</option><option value="empty">화면 정보 없음</option><option value="timeout">응답 시간 초과</option></select></label><p class="track-outcome" aria-live="polite">먼저 현재 앱을 저장해 주세요.</p><details><summary>상태와 통신 기록</summary><pre class="track-data">아직 요청이 없습니다.</pre></details>
+        </section>
+        <section class="panel track" data-device="ir"><span class="source-label">06 · 적외선 리모컨</span><h3>신호를 배우고, 다시 보내 줘</h3><p>Broadlink UDP 학습·전송을 실행합니다. 가상 코드이며 실제 기차 코드가 아닙니다. 출발 전송 후 정지 코드도 보냅니다.</p>
+          <div class="track-actions"><button data-plan='{"op":"learn","name":"stop"}'>정지 코드 학습</button><button data-plan='{"op":"learn","name":"forward"}'>출발 코드 학습</button><button data-plan='{"op":"send","name":"forward","hold_seconds":0.3}'>출발 → 정지 전송</button><button data-plan='{"op":"send","name":"stop"}'>정지 전송</button></div>
+          <label>가상 응답 <select data-track-fault><option value="none">정상</option><option value="no_code">학습 코드 없음</option><option value="reject">전송 거절</option><option value="timeout">응답 시간 초과</option></select></label><p class="track-outcome" aria-live="polite">정지 코드부터 학습해 주세요.</p><details><summary>상태와 통신 기록</summary><pre class="track-data">아직 요청이 없습니다.</pre></details>
+        </section>
+        <section class="panel track" data-device="vacuum"><span class="source-label">07 · 로봇청소기</span><h3>현관 구역만 청소해 줘</h3><p>Valetudo API 형식으로 지정 구역 청소를 요청하고 상태를 다시 읽습니다. 카메라로 오염이나 청소 완료를 판단하지 않습니다.</p>
+          <div class="track-actions"><button data-plan='{"action":"clean_zone","zone":"entry"}'>현관 청소 시작</button><button data-plan='{"action":"pause"}'>일시정지</button></div>
+          <label>가상 응답 <select data-track-fault><option value="none">정상</option><option value="ignore">명령 무시</option><option value="unavailable">장치 연결 끊김</option><option value="timeout">응답 시간 초과</option></select></label><p class="track-outcome" aria-live="polite">청소 요청을 기다리고 있어요.</p><details><summary>상태와 통신 기록</summary><pre class="track-data">아직 요청이 없습니다.</pre></details>
+        </section>
+      </div>
+      <div class="actions"><button id="extended-stop" class="stop-button">■ 모든 요청 중단 · 청소기 일시정지</button><button id="extended-reset" class="quiet-button">가상 장치 초기화</button></div>
+      <p class="hint">04·07은 공개 API의 일부를 구현한 로컬 테스트 상대입니다. Home Assistant·Valetudo 서버 자체를 실행한 것은 아닙니다. 전송 응답을 실제 조명·TV·기차·청소기 동작으로 표시하지 않습니다.</p>
+    </section>
+    <footer><span>KEVIN · OBA.RUN 2nd</span><span>재사용: <a href="https://github.com/frenck/python-wled" target="_blank" rel="noopener">python-wled / MIT</a> · <a href="https://github.com/JeffLIrion/adb_shell" target="_blank" rel="noopener">adb-shell / Apache-2.0</a> · <a href="https://github.com/mjg59/python-broadlink" target="_blank" rel="noopener">python-broadlink / MIT</a></span></footer>
+  </main>
+  <script src="/demo.js"></script>
+</body>
+</html>
