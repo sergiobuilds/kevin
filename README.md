@@ -55,6 +55,23 @@ flowchart LR
 
 연결 하나를 만들면 **같은 기기를 가진 모든 사람과, MCP를 쓰는 모든 에이전트가** 다시 씁니다. 기기 종류가 늘수록 에이전트가 할 수 있는 일이 늘어납니다. KEVIN은 앱 하나가 아니라, 에이전트가 물리 세계로 나가는 길목에 놓이는 계층입니다.
 
+## 케빈과 대화하기 — 정해진 명령이 아니라 상황
+
+**[웹에서 바로 만나기 →](https://sergiobuilds.github.io/kevin/)** 도스 게임풍 방에서 케빈이 서성이고, 말을 걸면 대답합니다(ElevenLabs 목소리, 웹캠, 음성 입력).
+
+케빈은 GPT-5.4로 대화를 기억하며 전광판에 무엇을 띄울지, 라디오로 무엇을 틀지 스스로 정합니다. 행사장에서 실제로 돌린 장면입니다.
+
+| 말 | 케빈 | 전광판 (실물 수신 확인) | 라디오 |
+|---|---|---|---|
+| 크리스마스 분위기 내줘. 눈 펑펑, 캐럴도 | 좋지, 내가 바로 크리스마스 점령한다! | 눈 내리는 기차 애니메이션 | 징글벨 |
+| 오늘 지민이 생일이야! 축하해줘 | 전광판으로 축하 쏘고 생일축하 노래 바로 튼다 | 🎂 생일 축하해 지민아 🎉 | 케빈이 쓴 생일축하 멜로디 |
+| 가위바위보 하자! 나는 보 | 난 바위! 으악, 네가 이겼어! (1:0) | ✋ vs ✊ 너 승 1:0 | — |
+| 퀴즈 하나 내줘 → 정답은 서울! | 딩동댕, 서울 맞았어! | 퀴즈 문제 → 점수판 1:0 | — |
+| 학교종이 땡땡땡 틀어줘 | 이번엔 진짜 학교종이다! | 그대로 | 학교종 멜로디 |
+| 전부 꺼줘 | 집안 쇼는 여기까지! | 꺼짐 | 정지 |
+
+가위바위보 승패는 모델이 아니라 코드가 규칙대로 판정합니다(케빈의 손은 사람 손을 보기 전에 무작위로 정함). 노래는 케빈이 음이름으로 멜로디를 쓰면 8비트 소리로 합성해 라디오로 보냅니다.
+
 ## 시키지 않아도, 케빈이 스스로
 
 케빈은 웹캠으로 방을 보고 1초마다 스스로 판단합니다. 기기 안의 작은 AI가 상황을 추론해 무엇을 할지 고르고, 규칙이 마지막으로 확인해 엉뚱한 경보나 꺼짐은 막습니다.
@@ -197,7 +214,8 @@ Luna 응답은 로컬 스키마 검증을 거쳐 기존 컨트롤러로 전달�
 |---|---|
 | 에이전트 연결 | [Model Context Protocol](https://modelcontextprotocol.io) (stdio, JSON-RPC 2.0) |
 | LED 전광판 | [pypixelcolor](https://github.com/lucagoc/pypixelcolor) 0.5.0, [Bleak](https://github.com/hbldh/bleak) / 참고: [go-ipxl](https://github.com/yyewolf/go-ipxl), [ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color) |
-| 계획 | [Ollama](https://ollama.com) + qwen2.5 3B, JSON Schema 구조화 출력 + 단어 보정 |
+| 대화·판단 | OpenAI GPT-5.4 (Responses API, 구조화 출력), OpenAI 비전(침입 판단), 오프라인 대체: Ollama qwen2.5 3B |
+| 목소리 | ElevenLabs (eleven_multilingual_v2) |
 | 영수증 | OpenCV 캡처, Pillow 전후 비교, [cryptography](https://cryptography.io) Ed25519 |
 | 음성 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (선택) |
 | 라디오 | Windows Runtime `MediaPlayer` + 블루투스 오디오 장치 지정 |
