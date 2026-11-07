@@ -47,6 +47,7 @@ class Eye:
         self.lock = threading.Lock()
         self.frame = None
         self.error = None
+        self.camera_name = None
         threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
@@ -58,9 +59,11 @@ class Eye:
         cap = None
         while True:
             if cap is None or not cap.isOpened():
-                cap = cv2.VideoCapture(int(os.getenv('KEVIN_CAMERA', '0')), getattr(cv2, 'CAP_DSHOW', 0))
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                cap = self._open_best(cv2)
+                if cap is None:
+                    self.error = 'no camera gives a picture'
+                    time.sleep(2)
+                    continue
             ok, frame = cap.read()
             if ok:
                 ok, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
@@ -72,6 +75,34 @@ class Eye:
                 cap = None
                 time.sleep(1)
             time.sleep(0.1)
+
+    def _open_best(self, cv2):
+        """Laptops often expose an IR face camera first; pick the camera with a visible picture."""
+        wanted = os.getenv('KEVIN_CAMERA', '')
+        order = [int(wanted)] if wanted.isdigit() else [0, 1, 2, 3]
+        best, best_mean = None, -1.0
+        for index in order:
+            for backend in (getattr(cv2, 'CAP_MSMF', 0), getattr(cv2, 'CAP_DSHOW', 0)):
+                cap = cv2.VideoCapture(index, backend)
+                if not cap.isOpened():
+                    continue
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                mean = -1.0
+                for _ in range(15):
+                    ok, frame = cap.read()
+                    if ok and frame is not None and frame.ndim == 3:
+                        mean = float(frame.mean())
+                if mean > best_mean:
+                    if best is not None:
+                        best.release()
+                    best, best_mean, self.camera_name = cap, mean, f'{index}/{backend}'
+                else:
+                    cap.release()
+                break
+            if best_mean > 40:
+                break
+        return best
 
     def jpeg(self):
         with self.lock:
@@ -168,7 +199,7 @@ class Bridge:
 
     def health(self):
         return {'ok': True, 'live': self.c.live_configured, 'camera': self.eye.jpeg() is not None,
-                'camera_error': self.eye.error, 'voice': bool(os.getenv('ELEVENLABS_API_KEY', '').strip()),
+                'camera_error': self.eye.error, 'camera_name': self.eye.camera_name, 'voice': bool(os.getenv('ELEVENLABS_API_KEY', '').strip()),
                 'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()),
                 'led': bool(os.getenv('KEVIN_LED_ADDRESS')), 'radio': os.getenv('KEVIN_RADIO_DEVICE') or None}
 
