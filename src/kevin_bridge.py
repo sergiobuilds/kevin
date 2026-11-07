@@ -25,7 +25,9 @@ for _extra in os.environ.get('PYTHONPATH', '').split(os.pathsep):
         sys.path.append(_extra)
 
 import guardian
+import kevin_agent
 import show_intent
+import song
 
 def _load_env_file():
     """Read KEY=VALUE lines from .openai.env next to the repo, if the shell did not set them."""
@@ -135,15 +137,17 @@ PORT = int(os.getenv('KEVIN_BRIDGE_PORT', '8787'))
 OPENAI_URL = 'https://api.openai.com/v1/responses'
 
 
-def openai_json(system: str, user_content, schema: dict, name: str, timeout=30) -> dict:
+def openai_json(system: str, user_content, schema: dict, name: str, timeout=30, model=None) -> dict:
     key = os.getenv('OPENAI_API_KEY', '').strip()
     if not key:
         raise RuntimeError('OPENAI_API_KEY not set')
     body = {
-        'model': os.getenv('KEVIN_OPENAI_MODEL', 'gpt-4.1-mini'),
+        'model': model or os.getenv('KEVIN_OPENAI_MODEL', 'gpt-4.1-mini'),
         'input': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user_content}],
         'text': {'format': {'type': 'json_schema', 'name': name, 'schema': schema, 'strict': True}},
     }
+    if body['model'].startswith('gpt-5'):
+        body['reasoning'] = {'effort': os.getenv('KEVIN_REASONING', 'none')}
     req = urllib.request.Request(OPENAI_URL, json.dumps(body).encode(),
                                  {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -205,22 +209,92 @@ class Bridge:
 
     def say(self, text):
         with self.lock:
-            state = self.c.get_state()
-            current = dict(state.get('recipe') or {})
-            p, source = plan(text, current)
-            if p['mode'] == 'unsupported':
-                return {'reply': p['explanation'], 'plan': p, 'source': source}
-            if p['mode'] == 'stop':
-                self.c.supersede()
-                self.c.stop()
-                return {'reply': p['explanation'], 'plan': p, 'source': source}
+            self.history = getattr(self, 'history', [])
+            prev = getattr(self, 'job_cancel', None)
+            if prev:
+                prev.set()
             self.c.supersede()
-            self.c.planner = lambda _t, _r, p=p: dict(p)
+            cancel = self.job_cancel = threading.Event()
+            state = self.c.get_state()
+            summary = {'recipe': state.get('recipe'), 'led': getattr(self, 'led_now', 'scene'),
+                       'radio': (state.get('radio') or {}).get('status')}
             try:
-                self.c.command(text, self.c.live_configured)
-            finally:
-                self.c.planner = None
+                turn = kevin_agent.decide(text, self.history, summary, openai_json)
+                source = 'openai-agent'
+            except Exception:
+                return self._say_plan(text)
+            self.history += [{'who': '사람', 'text': text}, {'who': 'KEVIN', 'text': turn['reply']}]
+            self.history = self.history[-20:]
+            threading.Thread(target=self._act, args=(turn, cancel), daemon=True).start()
+            return {'reply': turn['reply'], 'turn': turn, 'source': source}
+
+    def _act(self, turn, cancel):
+        led, music = turn['led'], turn['music']
+        live = self.c.live_configured
+        def color(v, d):
+            v = (v or '').strip().lstrip('#')
+            return v.lower() if len(v) == 6 and all(ch in '0123456789abcdefABCDEF' for ch in v) else d
+        try:
+            if led['mode'] == 'scene':
+                plan = {'mode': 'update', 'preset': led['preset'], 'speed': None, 'snow': led['snow'],
+                        'sky': led['sky'].lower() if len(led['sky']) == 7 and led['sky'].startswith('#') else 'keep',
+                        'music': 'play' if music['mode'] == 'carol' else 'stop' if music['mode'] == 'stop' else 'keep',
+                        'volume': music['volume'], 'explanation': turn['reply']}
+                if music['mode'] == 'carol':
+                    self.c.audio_prepared = False
+                self.c.planner = lambda _t, _r, p=plan: dict(p)
+                try:
+                    self.c.command('agent', live)
+                finally:
+                    self.c.planner = None
+                self.led_now = 'scene'
+            elif live and led['mode'] == 'text' and led['text'].strip():
+                anim = {'scroll_left': 'scroll_left', 'blink': 'blink', 'snowflake': 'snowflake', 'fade': 'fade'}.get(led['animation'], 'static')
+                if anim == 'static' and len(led['text']) > 9:
+                    anim = 'scroll_left'
+                self.c.transport.command('send_text', cancel, led['text'], animation=anim, speed=70,
+                                         color=color(led['color'], 'ffffff'), bg_color=color(led['bg'], None) if led['bg'] not in ('#000000', '') else None)
+                self.led_now = 'text: ' + led['text']
+            elif live and led['mode'] == 'score':
+                self.c.transport.command('set_scores', cancel, max(0, min(99, led['score_left'])), max(0, min(99, led['score_right'])))
+                self.led_now = f"score {led['score_left']}:{led['score_right']}"
+            elif live and led['mode'] == 'clear':
+                self.c.transport.clear(cancel)
+                self.led_now = 'clear'
+            if cancel.is_set() or not live:
+                return
+            if music['mode'] == 'song' and music['notes']:
+                wav = song.melody_wav(music['notes'], music['tempo'] or 120)
+                self.c.radio.close()
+                self.c.radio.audio_path.parent.mkdir(parents=True, exist_ok=True)
+                self.c.radio.audio_path.write_bytes(wav)
+                self.c.audio_prepared = True
+                self.c.radio.play(music['volume'] or 60, cancel)
+            elif music['mode'] == 'carol' and led['mode'] != 'scene':
+                self.c.radio.close()
+                self.c.audio_prepared = False
+                self.c._prepare_audio(cancel)
+                self.c.radio.play(music['volume'] or 60, cancel)
+            elif music['mode'] == 'stop' and led['mode'] != 'scene':
+                self.c.radio.stop()
+        except Exception:
+            pass
+
+    def _say_plan(self, text):
+        state = self.c.get_state()
+        current = dict(state.get('recipe') or {})
+        p, source = plan(text, current)
+        if p['mode'] == 'unsupported':
             return {'reply': p['explanation'], 'plan': p, 'source': source}
+        if p['mode'] == 'stop':
+            self.c.stop()
+            return {'reply': p['explanation'], 'plan': p, 'source': source}
+        self.c.planner = lambda _t, _r, p=p: dict(p)
+        try:
+            self.c.command(text, self.c.live_configured)
+        finally:
+            self.c.planner = None
+        return {'reply': p['explanation'], 'plan': p, 'source': source}
 
     def guard(self, body):
         mode = body.get('mode', 'away')
@@ -340,6 +414,9 @@ def make_handler(bridge):
                     self.wfile.write(audio)
                     return
                 if self.path.startswith('/stop'):
+                    if getattr(bridge, 'job_cancel', None):
+                        bridge.job_cancel.set()
+                    bridge.c.supersede()
                     bridge.c.stop()
                     return self._send(200, {'reply': '알았어, 다 멈출게.'})
                 if self.path.startswith('/guard'):

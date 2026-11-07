@@ -156,6 +156,35 @@ class LedTransport:
         return {'status': 'acknowledged', 'physical_verified': False,
                 'frames': len(scene['frames']), 'bytes': len(data)}
 
+    async def _command(self, name, args, kwargs, cancel):
+        from pypixelcolor.commands import COMMANDS
+        session = self.session_factory(self.address)
+        try:
+            await session.connect()
+            check_cancel(cancel)
+            info = session.get_device_info()
+            if (info.width, info.height) != (144, 16) or info.device_type != 135:
+                raise TransportError('only the known 144x16 panel type is supported')
+            result = await session.execute_command(COMMANDS[name], *args, **kwargs)
+            if result.success is not True:
+                raise TransportError('panel command was not acknowledged')
+        finally:
+            await asyncio.wait_for(session.disconnect(), timeout=5)
+
+    def command(self, name, cancel, *args, **kwargs):
+        """Run one native panel command (send_text, set_scores ...)."""
+        if not self.address:
+            raise TransportError('explicit panel configuration required')
+        try:
+            with self.lock:
+                check_cancel(cancel)
+                asyncio.run(asyncio.wait_for(self._command(name, args, kwargs, cancel), timeout=60))
+        except Cancelled:
+            raise
+        except Exception as error:
+            raise TransportError('LED command failed') from error
+        return {'status': 'acknowledged', 'command': name}
+
     def clear(self, cancel):
         black = [['#000000'] * 144 for _ in range(16)]
         result = self.send({'frames': [black], 'duration': 120}, cancel)
