@@ -138,6 +138,38 @@ class VacuumTests(unittest.TestCase):
         self.assertEqual(['/api/v2/robot/capabilities/ZoneCleaningCapability',
                           '/api/v2/robot/capabilities/BasicControlCapability'], writes)
 
+    def test_timed_out_clean_may_execute_after_pause_so_stop_is_unconfirmed(self):
+        entered, release, completed = threading.Event(), threading.Event(), threading.Event()
+        original = self.server.device.mutate
+        def delayed_start(method, path, body):
+            if path.endswith('/ZoneCleaningCapability'):
+                entered.set()
+                release.wait(2)
+                result = original(method, path, body)
+                completed.set()
+                return result
+            return original(method, path, body)
+        self.server.device.mutate = delayed_start
+        results = []
+        worker = threading.Thread(target=lambda: results.append(self.clean()))
+        worker.start()
+        self.assertTrue(entered.wait(1))
+        try:
+            worker.join(1)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual('failed', results[0].status)
+            stopped = self.adapter.stop()
+            self.assertEqual('failed', stopped.status)
+            self.assertEqual('prior_clean_outcome_unknown', stopped.detail['error'])
+            self.assertFalse(stopped.detail['inactive_reported'])
+        finally:
+            release.set()
+            worker.join(2)
+        self.assertTrue(completed.wait(1))
+        self.assertEqual('cleaning', self.server.device.vacuum['status'])
+        # A retry can send pause, but cannot erase an unresolved remote write.
+        self.assertEqual('failed', self.adapter.stop().status)
+
 
 if __name__ == '__main__':
     unittest.main()
