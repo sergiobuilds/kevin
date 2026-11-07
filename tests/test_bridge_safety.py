@@ -137,5 +137,7 @@ class BridgeSafetyTests(unittest.TestCase):
             bridge.c.stop.assert_not_called()
             self.assertEqual(request('https://sergiobuilds.github.io'), (200, 'https://sergiobuilds.github.io'))
             self.assertEqual(request()[0], 200)
+            bridge.c.stop.return_value = {'status': 'error'}
+            self.assertEqual(request()[0], 503)
         finally:
             server.shutdown(); server.server_close(); worker.join(2)

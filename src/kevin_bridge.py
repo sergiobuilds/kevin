@@ -525,8 +525,10 @@ def make_handler(bridge):
                     self.wfile.write(audio)
                     return
                 if self.path.startswith('/stop'):
-                    bridge.stop()
-                    return self._send(200, {'reply': '알았어, 다 멈출게.'})
+                    result = bridge.stop()
+                    failed = result.get('status') == 'error'
+                    return self._send(503 if failed else 200, dict(result,
+                        reply='정지를 확인하지 못했어. 기기를 확인해줘.' if failed else '정지 요청을 전달했어.'))
                 if self.path.startswith('/guard'):
                     return self._send(200, bridge.guard(body))
                 self._send(404, {'error': 'not found'})
