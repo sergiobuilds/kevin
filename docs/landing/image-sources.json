@@ -53,5 +53,21 @@
       "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/assets/brand/banner.png",
       "kind": "project_banner"
     }
-  ]
+  ],
+  "wordmark": {
+    "source_asset": "assets/project-banner.png",
+    "method": "SVG viewport of the unchanged original GitHub banner",
+    "view_box": [
+      44,
+      104,
+      604,
+      136
+    ],
+    "locations": [
+      "header",
+      "hero",
+      "footer"
+    ],
+    "identity": "white dot KEVIN wordmark with red cursor"
+  }
 }
