@@ -346,7 +346,13 @@ class Bridge:
                    'idle_limit': int(body.get('idle_limit', 30)), 'suspicious_streak': 0}
             action, why = guardian.rule(obs)
             if action == 'power_save':
-                self.stop()
+                result = self.stop()
+                status = result.get('status', 'unknown')
+                if status != 'stopped':
+                    return {'action': 'none', 'stop_status': status,
+                            'reply': '정지 요청을 전달했어. 아직 정지를 확인 중이야.' if status == 'stopping' else
+                                     '정지를 확인하지 못했어. 기기를 확인해줘.'}
+                return {'action': action, 'stop_status': status, 'reply': why}
             return {'action': action, 'reply': why}
         if mode != 'away' or now < self.alarm_until:
             return {'action': 'none', 'reply': ''}

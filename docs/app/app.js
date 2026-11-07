@@ -186,10 +186,17 @@ async function guard(kind, idle = 0) {
     if (r.action === 'intruder_alert') {
       $('alert').hidden = false; state.view = 'talk'; say(r.reply); log('침입 감지 → 경보' + (r.seen ? ' (' + r.seen + ')' : ''));
       setTimeout(() => { $('alert').hidden = true; }, 15000);
-    } else if (r.action === 'power_save') {
+    } else if (r.action === 'power_save' && r.stop_status === 'stopped') {
       state.devicesOn = false; say(r.reply); log('절약: 기기 끔');
+    } else if (r.stop_status || r.action === 'power_save') {
+      state.devicesOn = null; say(r.reply || '정지를 확인하지 못했어. 기기를 확인해줘.');
+      log(r.stop_status === 'stopping' ? '절약: 정지 확인 중' : '절약: 정지 확인 실패');
     }
-  } catch { /* bridge offline */ }
+  } catch {
+    if (kind === 'idle') {
+      state.devicesOn = null; say('정지를 확인하지 못했어. 기기를 확인해줘.'); log('절약: 정지 확인 실패');
+    }
+  }
   setTimeout(() => state.guardBusy = false, 3000);
 }
 
