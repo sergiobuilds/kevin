@@ -1,0 +1,57 @@
+{
+  "source_commit": "4434b0f7fa9b545aff26c30ae63b62135a6d4fc2",
+  "repository": "https://github.com/sergiobuilds/kevin",
+  "date": "2026-11-07",
+  "assets": [
+    {
+      "file": "assets/uc_factory.jpg",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/uc_factory.jpg",
+      "kind": "scenario_illustration"
+    },
+    {
+      "file": "assets/uc_mole.jpg",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/uc_mole.jpg",
+      "kind": "scenario_illustration"
+    },
+    {
+      "file": "assets/uc_medical.jpg",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/uc_medical.jpg",
+      "kind": "scenario_illustration"
+    },
+    {
+      "file": "assets/uc_elevator.jpg",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/uc_elevator.jpg",
+      "kind": "scenario_illustration"
+    },
+    {
+      "file": "assets/uc_store.jpg",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/uc_store.jpg",
+      "kind": "scenario_illustration"
+    },
+    {
+      "file": "assets/uc_farm.jpg",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/uc_farm.jpg",
+      "kind": "scenario_illustration"
+    },
+    {
+      "file": "assets/web-room.png",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/web-room.png",
+      "kind": "published_ui_capture"
+    },
+    {
+      "file": "assets/web-talk.png",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/web-talk.png",
+      "kind": "published_ui_capture"
+    },
+    {
+      "file": "assets/web-alert.png",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/docs/web-alert.png",
+      "kind": "published_ui_capture"
+    },
+    {
+      "file": "assets/project-banner.png",
+      "source": "https://github.com/sergiobuilds/kevin/blob/4434b0f7fa9b545aff26c30ae63b62135a6d4fc2/assets/brand/banner.png",
+      "kind": "project_banner"
+    }
+  ]
+}
