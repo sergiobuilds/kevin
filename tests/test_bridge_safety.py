@@ -87,3 +87,13 @@ class BridgeSafetyTests(unittest.TestCase):
         self.assertTrue(entered.wait(1)); cancel.set(); worker.join(1)
         self.assertFalse(worker.is_alive()); self.assertTrue(finished.is_set())
         self.assertEqual(errors, ['cancelled'])
+
+
+    def test_native_commands_invalidate_scene(self):
+        for mode in ('text', 'score', 'clear'):
+            bridge = self.bridge()
+            turn = {'reply': 'ok', 'led': {'mode': mode, 'text': 'hello', 'animation': 'static',
+                    'color': '#ffffff', 'bg': '', 'score_left': 1, 'score_right': 2},
+                    'music': {'mode': 'carol', 'volume': 0}}
+            bridge._act(turn, bridge.job_cancel)
+            self.assertIsNone(bridge.c.applied_scene)

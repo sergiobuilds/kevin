@@ -232,6 +232,12 @@ class Bridge:
             return self.c.command(text, self.c.live_configured, cancel=cancel,
                                   planner=lambda *_: dict(plan))
 
+    def _invalidate_scene(self, cancel):
+        with self.job_lock:
+            check_cancel(cancel)
+            with self.c.lock:
+                self.c.applied_scene = None
+
     def say(self, text):
         with self.lock:
             self.history = getattr(self, 'history', [])
@@ -269,6 +275,7 @@ class Bridge:
                 self._command('agent', plan, cancel)
                 self.led_now = 'scene'
             elif live and led['mode'] == 'text' and led['text'].strip():
+                self._invalidate_scene(cancel)
                 anim = {'scroll_left': 'scroll_left', 'blink': 'blink', 'snowflake': 'snowflake', 'fade': 'fade'}.get(led['animation'], 'static')
                 if anim == 'static' and len(led['text']) > 9:
                     anim = 'scroll_left'
@@ -276,9 +283,11 @@ class Bridge:
                                          color=color(led['color'], 'ffffff'), bg_color=color(led['bg'], None) if led['bg'] not in ('#000000', '') else None)
                 self.led_now = 'text: ' + led['text']
             elif live and led['mode'] == 'score':
+                self._invalidate_scene(cancel)
                 self.c.transport.command('set_scores', cancel, max(0, min(99, led['score_left'])), max(0, min(99, led['score_right'])))
                 self.led_now = f"score {led['score_left']}:{led['score_right']}"
             elif live and led['mode'] == 'clear':
+                self._invalidate_scene(cancel)
                 self.c.transport.clear(cancel)
                 self.led_now = 'clear'
             if cancel.is_set() or not live:
@@ -359,6 +368,7 @@ class Bridge:
         def act():
             try:
                 if self.c.live_configured:
+                    self._invalidate_scene(cancel)
                     check_cancel(cancel)
                     self.c.transport.send(guardian.intruder_scene(), cancel)
                     check_cancel(cancel)
