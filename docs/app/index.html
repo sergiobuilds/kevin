@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEVIN — 어떤 기기든, AI의 도구로</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="crt">
+  <header>
+    <span class="logo">KEVIN<span class="cursor">▌</span></span>
+    <span class="chips">
+      <span id="chip-bridge" class="chip">BRIDGE</span>
+      <span id="chip-ai" class="chip">AI</span>
+      <span id="chip-led" class="chip">LED</span>
+      <span id="chip-radio" class="chip">RADIO</span>
+      <span id="chip-cam" class="chip">CAM</span>
+    </span>
+    <span id="clock"></span>
+  </header>
+
+  <main>
+    <section id="stage">
+      <canvas id="scene" width="320" height="200"></canvas>
+      <div id="alert" hidden><b>누구야?!</b><small>경찰 신고 · KEVIN 집 지킴</small></div>
+    </section>
+
+    <aside>
+      <div class="panel">
+        <div class="title">KEVIN의 눈</div>
+        <canvas id="eye" width="160" height="120"></canvas>
+        <video id="cam" autoplay playsinline muted hidden></video>
+        <div class="meter"><span>움직임</span><i><b id="motion-bar"></b></i></div>
+        <div id="eye-note" class="note">카메라 켜는 중…</div>
+      </div>
+      <div class="panel">
+        <div class="title">모드</div>
+        <div class="modes">
+          <button data-mode="talk" class="on">F1 대화</button>
+          <button data-mode="away">F2 집 비움</button>
+          <button data-mode="home">F3 절약</button>
+        </div>
+        <div id="mode-note" class="note">말을 걸면 케빈이 대답해요.</div>
+      </div>
+      <div class="panel log">
+        <div class="title">기록</div>
+        <ol id="log"></ol>
+      </div>
+    </aside>
+  </main>
+
+  <section id="dialog">
+    <div class="name">【KEVIN】</div>
+    <p id="line"></p>
+    <form id="ask" autocomplete="off">
+      <span>&gt;</span><input id="text" placeholder="말하거나 입력하세요 — 예: 크리스마스로 만들어줘, 눈 펑펑, 캐럴도!" maxlength="200">
+      <button type="button" id="mic" title="길게 누르거나 클릭해서 말하기">🎤 말하기</button>
+      <button type="button" id="stop" title="Esc">■ 정지</button>
+    </form>
+    <div class="keys">Enter 보내기 · Space(빈 입력에서) 말하기 · Esc 전부 정지 · F1~F3 모드</div>
+  </section>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
