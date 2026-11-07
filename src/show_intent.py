@@ -180,9 +180,11 @@ def ground(prompt, spec, current):
     if not _VOLUME.search(text):
         out["volume"] = None
     elif out["volume"] is None:  # the sentence clearly asks for quieter/louder
-        was = current.get("volume") or 45
+        was = current.get("volume")
+        if type(was) not in (int, float):
+            was = 45
         if re.search(r"조용|작게|줄여|낮춰|quiet", text, re.I):
-            out["volume"] = max(10, round(was * 0.5))
+            out["volume"] = max(0, round(was * 0.5))
         elif re.search(r"크게|키워|높여|louder", text, re.I):
             out["volume"] = min(100, round(was * 1.4))
     changed = any(out[k] != v for k, v in keep.items())

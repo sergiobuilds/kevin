@@ -87,6 +87,15 @@ class IntentTests(unittest.TestCase):
                     show_intent.interpret(prompt, recipe)
                 call.assert_not_called()
 
+    def test_quieter_after_upstream_merge_never_raises_muted_or_low_volume(self):
+        for previous, expected in ((0, 0), (4, 2), (40, 20)):
+            with self.subTest(previous=previous):
+                result = show_intent.ground('음악 좀 조용하게',
+                                           {**UPDATE, 'music': 'play', 'volume': None},
+                                           {'volume': previous})
+                self.assertEqual(result['music'], 'keep')
+                self.assertEqual(result['volume'], expected)
+
     def test_refusal_survives_supported_keywords_in_mixed_requests(self):
         refusal = {**UPDATE, 'mode': 'unsupported', 'snow': 'keep',
                    'explanation': 'TV는 지원하지 않습니다.'}
