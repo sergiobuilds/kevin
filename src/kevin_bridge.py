@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -21,6 +22,7 @@ import urllib.parse
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # embedded Pythons ignore PYTHONPATH
 for _extra in os.environ.get('PYTHONPATH', '').split(os.pathsep):
@@ -53,6 +55,7 @@ class Eye:
     def __init__(self):
         self.lock = threading.Lock()
         self.frame = None
+        self.captured_at = None
         self.error = None
         self.camera_name = None
         if os.getenv('KEVIN_CAMERA', '').strip().lower() == 'off':
@@ -71,16 +74,19 @@ class Eye:
             if cap is None or not cap.isOpened():
                 cap = self._open_best(cv2)
                 if cap is None:
-                    self.error = 'no camera gives a picture'
+                    self._invalidate('no camera gives a picture')
                     time.sleep(2)
                     continue
             ok, frame = cap.read()
-            if ok:
+            if ok and frame is not None:
                 ok, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-                with self.lock:
-                    self.frame, self.error = jpg.tobytes(), None
+                if ok and jpg is not None:
+                    with self.lock:
+                        self.frame, self.error, self.captured_at = jpg.tobytes(), None, time.monotonic()
+                else:
+                    self._invalidate('camera encoding failed')
             else:
-                self.error = 'camera returned no frame'
+                self._invalidate('camera returned no frame')
                 cap.release()
                 cap = None
                 time.sleep(1)
@@ -94,7 +100,8 @@ class Eye:
         order = [int(wanted)] if wanted.isdigit() else [0, 1, 2, 3]
         best, best_mean = None, -1.0
         for index in order:
-            for backend in (getattr(cv2, 'CAP_MSMF', 0), getattr(cv2, 'CAP_DSHOW', 0)):
+            backends = (cv2.CAP_MSMF, cv2.CAP_DSHOW) if sys.platform == 'win32' else (cv2.CAP_ANY,)
+            for backend in backends:
                 cap = cv2.VideoCapture(index, backend)
                 if not cap.isOpened():
                     continue
@@ -117,8 +124,18 @@ class Eye:
         return best
 
     def jpeg(self):
+        frame = self.snapshot()
+        return frame['image'] if frame else None
+
+    def _invalidate(self, reason):
         with self.lock:
-            return self.frame
+            self.frame, self.captured_at, self.error = None, None, reason
+
+    def snapshot(self):
+        with self.lock:
+            if self.frame is None or self.error or self.captured_at is None or time.monotonic() - self.captured_at > 2:
+                return None
+            return {'image': self.frame, 'captured_at': self.captured_at, 'source': 'camera'}
 
 
 ELEVEN_VOICE = os.getenv('ELEVENLABS_VOICE_ID', '')
@@ -179,7 +196,7 @@ def plan(text: str, current: dict) -> tuple[dict, str]:
 
 
 VISION_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': ['person', 'what'],
-                 'properties': {'person': {'type': 'boolean'}, 'what': {'type': 'string'}}}
+                 'properties': {'person': {'type': ['boolean', 'null']}, 'what': {'type': 'string'}}}
 
 
 def see_person(jpeg_b64: str) -> tuple[bool | None, str]:
@@ -187,214 +204,59 @@ def see_person(jpeg_b64: str) -> tuple[bool | None, str]:
     if not os.getenv('OPENAI_API_KEY', '').strip() or not jpeg_b64:
         return None, ''
     try:
-        out = openai_json('You watch a home webcam. Answer whether a person is visible and describe in one short Korean phrase.',
+        out = openai_json('You watch a home webcam. Return person=true if a person is visible, '
+                          'false only when the room view clearly supports no person being present, '
+                          'or null if visibility is poor, obstructed or uncertain. Describe in one short Korean phrase.',
                           [{'type': 'input_image', 'image_url': 'data:image/jpeg;base64,' + jpeg_b64}],
                           VISION_SCHEMA, 'kevin_seen', timeout=20)
-        return bool(out['person']), out['what']
+        if type(out.get('person')) is not bool or not isinstance(out.get('what'), str):
+            return None, ''
+        return out['person'], out['what']
     except Exception:
         return None, ''
 
 
-class Bridge:
-    def __init__(self, controller=None, ai=None, eye=None):
+from bridge_runtime import BridgeRuntime
+
+
+class Bridge(BridgeRuntime):
+    def __init__(self, controller=None, eye=None, ai=None, **kwargs):
         if controller is None:
             from show_control import ShowController
             controller = ShowController()
-        self.c = controller
         self.ai = ai or AISettings()
-        self.lock = threading.Lock()
-        self.job_lock = threading.RLock()
-        self.job_cancel = threading.Event()
-        self.alarm_until = 0
-        self.eye = eye or Eye()
-
-    def health(self):
-        return {'ok': True, 'live': self.c.live_configured, 'camera': self.eye.jpeg() is not None,
-                'camera_error': self.eye.error, 'camera_name': self.eye.camera_name, 'voice': bool(os.getenv('ELEVENLABS_API_KEY', '').strip()),
-                'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()), 'ai': self.ai.public(),
-                'led': bool(os.getenv('KEVIN_LED_ADDRESS')), 'radio': os.getenv('KEVIN_RADIO_DEVICE') or None}
-
-    def _new_job(self):
-        with self.job_lock:
-            prev = getattr(self, 'job_cancel', None)
-            if prev:
-                prev.set()
-            self.c.supersede()
-            self.job_cancel = threading.Event()
-            return self.job_cancel
-
-    def stop(self):
-        # Planning and device waits must never hold this lifecycle lock.
-        with self.job_lock:
-            if getattr(self, 'job_cancel', None):
-                self.job_cancel.set()
-            return self.c.stop()
-
-    def _command(self, text, plan, cancel):
-        with self.job_lock:
-            check_cancel(cancel)
-            return self.c.command(text, self.c.live_configured, cancel=cancel,
-                                  planner=lambda *_: dict(plan))
-
-    def _invalidate_scene(self, cancel):
-        with self.job_lock:
-            check_cancel(cancel)
-            with self.c.lock:
-                self.c.applied_scene = None
-
-    def say(self, text):
-        with self.lock:
+        def selected_agent(text, history, state):
             if not self.ai.public()['configured']:
-                return {'reply': '먼저 명령 해석 AI를 설정해 주세요.', 'error': 'ai_setup_required'}
-            self.history = getattr(self, 'history', [])
-            cancel = self._new_job()
-            state = self.c.get_state()
-            summary = {'recipe': state.get('recipe'), 'led': getattr(self, 'led_now', 'scene'),
-                       'radio': (state.get('radio') or {}).get('status')}
+                raise SettingsError('명령 해석 AI 설정이 필요합니다.')
+            config = runtime_config(self.ai.env)
+            def selected_json(system, content, schema, name, timeout=30, model=None):
+                return ai_json(system, content, schema, config)
             try:
-                config = runtime_config(self.ai.env)
-                def selected_json(system, content, schema, name, timeout=30, model=None):
-                    return ai_json(system, content, schema, config)
-                turn = kevin_agent.decide(text, self.history, summary, selected_json)
-                source = config['KEVIN_PLANNER'] + '-agent'
+                return kevin_agent.decide(text, history, state, selected_json, judge=False)
             except Exception:
                 self.ai.mark_failed()
-                return {'reply': 'AI 연결을 확인해 주세요. 설정에서 다시 확인할 수 있어요.', 'error': 'ai_unavailable'}
-            if cancel.is_set():
-                return {'reply': '알았어, 다 멈출게.', 'source': source, 'cancelled': True}
-            self.history += [{'who': '사람', 'text': text}, {'who': 'KEVIN', 'text': turn['reply']}]
-            self.history = self.history[-20:]
-            threading.Thread(target=self._act, args=(turn, cancel), daemon=True).start()
-            return {'reply': turn['reply'], 'turn': turn, 'source': source}
+                raise
+        def selected_plan(text, current):
+            from show_control import interpret
+            if not self.ai.public()['configured']:
+                raise SettingsError('명령 해석 AI 설정이 필요합니다.')
+            config = runtime_config(self.ai.env)
+            return interpret(text, current, config), config['KEVIN_PLANNER']
+        super().__init__(controller, Eye() if eye is None else eye,
+            plan_fn=kwargs.pop('plan_fn', selected_plan),
+            agent_fn=kwargs.pop('agent_fn', selected_agent),
+            vision_fn=kwargs.pop('vision_fn', see_person), **kwargs)
 
-    def _act(self, turn, cancel):
-        led, music = turn['led'], turn['music']
-        live = self.c.live_configured
-        def color(v, d):
-            v = (v or '').strip().lstrip('#')
-            return v.lower() if len(v) == 6 and all(ch in '0123456789abcdefABCDEF' for ch in v) else d
-        try:
-            check_cancel(cancel)
-            if led['mode'] == 'scene':
-                plan = {'mode': 'update', 'preset': led['preset'], 'speed': None, 'snow': led['snow'],
-                        'sky': led['sky'].lower() if len(led['sky']) == 7 and led['sky'].startswith('#') else 'keep',
-                        'music': 'play' if music['mode'] == 'carol' else 'stop' if music['mode'] == 'stop' else 'keep',
-                        'volume': music['volume'], 'explanation': turn['reply']}
-                if music['mode'] == 'carol':
-                    self.c.audio_prepared = False
-                self._command('agent', plan, cancel)
-                self.led_now = 'scene'
-            elif live and led['mode'] == 'text' and led['text'].strip():
-                self._invalidate_scene(cancel)
-                anim = {'scroll_left': 'scroll_left', 'blink': 'blink', 'snowflake': 'snowflake', 'fade': 'fade'}.get(led['animation'], 'static')
-                if anim == 'static' and len(led['text']) > 9:
-                    anim = 'scroll_left'
-                self.c.transport.command('send_text', cancel, led['text'], animation=anim, speed=70,
-                                         color=color(led['color'], 'ffffff'), bg_color=color(led['bg'], None) if led['bg'] not in ('#000000', '') else None)
-                self.led_now = 'text: ' + led['text']
-            elif live and led['mode'] == 'score':
-                self._invalidate_scene(cancel)
-                self.c.transport.command('set_scores', cancel, max(0, min(99, led['score_left'])), max(0, min(99, led['score_right'])))
-                self.led_now = f"score {led['score_left']}:{led['score_right']}"
-            elif live and led['mode'] == 'clear':
-                self._invalidate_scene(cancel)
-                self.c.transport.clear(cancel)
-                self.led_now = 'clear'
-            if cancel.is_set() or not live:
-                return
-            if music['mode'] == 'song' and music['notes']:
-                wav = song.melody_wav(music['notes'], music['tempo'] or 120)
-                check_cancel(cancel)
-                self.c.radio.close()
-                self.c.radio.audio_path.parent.mkdir(parents=True, exist_ok=True)
-                self.c.radio.audio_path.write_bytes(wav)
-                self.c.audio_prepared = True
-                check_cancel(cancel)
-                self._radio(self.c.radio.play(music['volume'] if music['volume'] is not None else 60, cancel))
-            elif music['mode'] == 'carol' and led['mode'] != 'scene':
-                self.c.radio.close()
-                self.c.audio_prepared = False
-                self.c._prepare_audio(cancel)
-                check_cancel(cancel)
-                self._radio(self.c.radio.play(music['volume'] if music['volume'] is not None else 60, cancel))
-            elif music['mode'] == 'stop' and led['mode'] != 'scene':
-                self._radio(self.c.radio.stop())
-        except Exception as exc:
-            self.last_error = f'{type(exc).__name__}: {str(exc)[:120]}'
-
-    def _radio(self, result):
-        with self.c.lock:
-            self.c.state['radio'] = dict(result or {}, audible_verified=False)
-
-    def _say_plan(self, text, cancel):
-        state = self.c.get_state()
-        current = dict(state.get('recipe') or {})
-        p, source = plan(text, current)
-        if cancel.is_set():
-            return {'reply': '알았어, 다 멈출게.', 'source': source, 'cancelled': True}
-        if p['mode'] == 'unsupported':
-            return {'reply': p['explanation'], 'plan': p, 'source': source}
-        if p['mode'] == 'stop':
-            with self.job_lock:
-                check_cancel(cancel)
-                self.stop()
-            return {'reply': p['explanation'], 'plan': p, 'source': source}
-        self._command(text, p, cancel)
-        return {'reply': p['explanation'], 'plan': p, 'source': source}
-
-    def guard(self, body):
-        mode = body.get('mode', 'away')
-        now = time.time()
-        if body.get('kind') == 'idle':
-            obs = {'mode': 'home', 'devices_on': True, 'idle_seconds': int(body.get('idle_seconds', 0)),
-                   'idle_limit': int(body.get('idle_limit', 30)), 'suspicious_streak': 0}
-            action, why = guardian.rule(obs)
-            if action == 'power_save':
-                result = self.stop()
-                status = result.get('status', 'unknown')
-                if status != 'stopped':
-                    return {'action': 'none', 'stop_status': status,
-                            'reply': '정지 요청을 전달했어. 아직 정지를 확인 중이야.' if status == 'stopping' else
-                                     '정지를 확인하지 못했어. 기기를 확인해줘.'}
-                return {'action': action, 'stop_status': status, 'reply': why}
-            return {'action': action, 'reply': why}
-        if mode != 'away' or now < self.alarm_until:
-            return {'action': 'none', 'reply': ''}
-        # Observation alone must not interrupt a running user command. Keep
-        # its generation so stop/new commands invalidate delayed vision.
-        with self.job_lock:
-            observed_job = self.job_cancel
-        person, what = see_person(body.get('image') or base64.b64encode(self.eye.jpeg() or b'').decode())
-        if observed_job.is_set():
-            return {'action': 'none', 'reply': '', 'cancelled': True}
-        streak = int(body.get('streak', 0))
-        if person is False:  # the camera moved, but nobody is there
-            return {'action': 'none', 'reply': '', 'seen': what}
-        obs = {'mode': 'away', 'suspicious_streak': streak if person is None else max(streak, 2),
-               'devices_on': False, 'idle_seconds': 0, 'idle_limit': 0}
-        action, why = guardian.rule(obs)
-        if action != 'intruder_alert':
-            return {'action': 'none', 'reply': ''}
-        with self.job_lock:
-            if observed_job is not self.job_cancel or observed_job.is_set() or now < self.alarm_until:
-                return {'action': 'none', 'reply': '', 'cancelled': True}
-            cancel = self._new_job()
-            self.alarm_until = now + 60
-        result = {'action': action, 'reply': why, 'seen': what}
-        def act():
-            try:
-                if self.c.live_configured:
-                    self._invalidate_scene(cancel)
-                    check_cancel(cancel)
-                    self.c.transport.send(guardian.intruder_scene(), cancel)
-                    check_cancel(cancel)
-                    self.c._prepare_audio(cancel)
-                    check_cancel(cancel)
-                    self.c.radio.play(100, cancel)
-            except Exception:
-                pass
-        threading.Thread(target=act, daemon=True).start()
-        return result
+    def health(self):
+        frame = self.eye.snapshot()
+        return {'ok': True, 'live': self.c.live_configured, 'camera': frame is not None,
+                'camera_error': self.eye.error, 'camera_name': self.eye.camera_name,
+                'voice': bool(os.getenv('ELEVENLABS_API_KEY', '').strip()),
+                'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()),
+                'led': bool(self.c.config.get('KEVIN_LED_ADDRESS')),
+                'radio': self.c.config.get('KEVIN_RADIO_DEVICE') or None,
+                'ai': self.ai.public(), 'mode': self.mode, 'idle_limit': self.idle_limit,
+                'availability_scope': 'configured_not_device_verified'}
 
 
 def make_handler(bridge):
@@ -450,9 +312,8 @@ def make_handler(bridge):
             body = json.dumps(data, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
-            if private:
-                self.send_header('Cache-Control', 'no-store')
-            else:
+            self.send_header('Cache-Control', 'no-store')
+            if not private:
                 self._cors()
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
@@ -514,10 +375,29 @@ def make_handler(bridge):
                 self.wfile.write(data)
                 return
             if self.path.startswith('/state'):
-                s = bridge.c.get_state()
-                out = {k: s.get(k) for k in ('status', 'message', 'recipe', 'transport', 'radio')}
-                out.update(led_now=getattr(bridge, 'led_now', None), last_error=getattr(bridge, 'last_error', None))
-                return self._send(200, out)
+                return self._send(200, bridge.state())
+            path = urlsplit(self.path).path
+            if re.fullmatch(r'/jobs/[a-f0-9]{32}', path):
+                try:
+                    return self._send(200, bridge.state(path.rsplit('/', 1)[1]))
+                except KeyError:
+                    return self._send(404, {'error': 'job not found'})
+            match = re.fullmatch(r'/evidence/([0-9]{8}-[0-9]{6}-[a-f0-9]{6})/(receipt.json|before.jpg|after[12].jpg)', path)
+            if match:
+                rid, name = match.groups()
+                with bridge.lock:
+                    known = any((j.get('receipt') or {}).get('id') == rid for j in bridge.jobs.values())
+                target = bridge.out_dir / 'receipts' / rid / name
+                if known and target.is_file() and target.resolve().is_relative_to((bridge.out_dir / 'receipts').resolve()):
+                    data = target.read_bytes()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json' if name.endswith('.json') else 'image/jpeg')
+                    self.send_header('Content-Length', str(len(data)))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                return self._send(404, {'error': 'evidence unavailable'})
             if not self._static():
                 self._send(404, {'error': 'not found'})
 
@@ -549,15 +429,14 @@ def make_handler(bridge):
                     self.wfile.write(audio)
                     return
                 if self.path.startswith('/stop'):
-                    result = bridge.stop()
-                    failed = result.get('status') == 'error'
-                    return self._send(503 if failed else 200, dict(result,
-                        reply='정지를 확인하지 못했어. 기기를 확인해줘.' if failed else '정지 요청을 전달했어.'))
+                    return self._send(200, bridge.stop())
+                if self.path.startswith('/mode'):
+                    return self._send(200, bridge.set_mode(body.get('mode')))
                 if self.path.startswith('/guard'):
                     return self._send(200, bridge.guard(body))
                 self._send(404, {'error': 'not found'})
-            except Exception as exc:
-                self._send(400, {'error': str(exc)[:200], 'reply': '어, 뭔가 꼬였어. 다시 말해줄래?'})
+            except Exception:
+                self._send(400, {'error': 'request failed', 'reply': '요청을 처리하지 못했어. 실행 결과를 확인해 줘.'})
 
         def _ai_access(self, write=False):
             # Protect the new credential-writing surface from hosted pages and DNS rebinding.
@@ -602,8 +481,8 @@ def make_handler(bridge):
 
 
 WARM_LINES = ['안녕, 난 케빈이야. 이 집은 내가 맡을게. 말 걸어줘.', '응, 말 걸어줘.', '다녀와. 집은 내가 지킬게.',
-              '아무도 없으면 내가 알아서 끌게.', '알았어, 다 멈출게.', '누구세요? 지금 경찰에 신고했어요!',
-              '한동안 아무도 없어서 전광판이랑 라디오 껐어.']
+              '사람이 없는 상태가 확인되면 끌게. 못 보면 기다릴게.', '중단을 요청할게.', '누구세요? 경보를 울립니다!',
+              '사람이 없는 상태를 확인해서 중단을 요청했어.']
 
 
 def warm_up():

@@ -20,11 +20,12 @@
     </span>
     <span id="clock"></span>
   </header>
+  <div id="demo-note" hidden>가상 시연 · 모델 응답·장치·카메라가 테스트 데이터입니다. 실물은 연결하지 않습니다.</div>
 
   <main>
     <section id="stage">
       <canvas id="scene" width="320" height="200"></canvas>
-      <div id="alert" hidden><b>누구야?!</b><small>경찰 신고 · KEVIN 집 지킴</small></div>
+      <div id="alert" hidden><b>누구야?!</b><small>경보 요청 · KEVIN 집 지킴</small></div>
     </section>
 
     <aside>
@@ -43,6 +44,13 @@
           <button data-mode="home">F3 절약</button>
         </div>
         <div id="mode-note" class="note">말을 걸면 케빈이 대답해요.</div>
+      </div>
+      <div class="panel result-panel">
+        <div class="title">실행 결과 · <span id="job-status" aria-live="polite">대기 중</span></div>
+        <p id="device-results" class="note">아직 장치 응답이 없습니다.</p>
+        <p id="observation-result" class="note">관찰 자료가 있으면 여기에 표시합니다.</p>
+        <div id="evidence-images" hidden><img id="evidence-before" alt="실행 전 관찰"><img id="evidence-after" alt="실행 후 관찰"></div>
+        <a id="receipt-link" hidden target="_blank" rel="noopener">관찰 기록 보기</a>
       </div>
       <div class="panel log">
         <div class="title">기록</div>

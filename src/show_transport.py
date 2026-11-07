@@ -189,6 +189,25 @@ class LedTransport:
             raise TransportError('LED command failed') from error
         return {'status': 'acknowledged', 'command': name}
 
+    async def _cancellable_command(self, name, args, kwargs, cancel):
+        async def watch():
+            while not cancel.is_set():
+                await asyncio.sleep(.025)
+        work = asyncio.create_task(self._command(name, args, kwargs, cancel))
+        watcher = asyncio.create_task(watch())
+        try:
+            done, _ = await asyncio.wait((work, watcher), timeout=60, return_when=asyncio.FIRST_COMPLETED)
+            if work in done:
+                check_cancel(cancel)
+                return await work
+            if cancel.is_set():
+                raise Cancelled('show cancelled')
+            raise TransportError('panel command timeout')
+        finally:
+            watcher.cancel()
+            if not work.done(): work.cancel()
+            await asyncio.gather(work, watcher, return_exceptions=True)
+
     def clear(self, cancel):
         black = [['#000000'] * 144 for _ in range(16)]
         result = self.send({'frames': [black], 'duration': 120}, cancel)
