@@ -32,3 +32,12 @@ test('connection refusal does not report stopped; accepted request does', async 
   await a.api.stopAll(); assert.equal(a.api.state.devicesOn, false);
   assert.match(a.element('log').children[0].textContent, /요청 전달/);
 });
+test('camera images opt into CORS before src and watch survives unreadable frame', async () => {
+  const a = app(); a.api.pullRoomCam(); const next = a.images.at(-1);
+  assert.equal(next.assignedCors, 'anonymous'); next.onload(); assert.equal(a.api.roomCam.assignedCors, 'anonymous');
+  a.api.roomCam.complete = true; a.api.roomCam.naturalWidth = 320;
+  a.context2d.getImageData = () => { throw new Error('SecurityError'); };
+  await a.api.watch(); assert.ok(a.timers.includes(a.api.watch)); assert.equal(a.api.state.prev, null);
+  a.context2d.getImageData = () => ({ data: new Uint8Array(160 * 120 * 4) });
+  await a.api.watch(); assert.equal(a.api.state.prev.length, 160 * 120);
+});

@@ -116,6 +116,7 @@ function setMode(m) {
 
 // ---------- webcam: KEVIN's eye ----------
 const roomCam = new Image();
+roomCam.crossOrigin = 'anonymous';
 let camSource = 'room';
 async function startCam() {
   roomCam.onload = () => { chip('chip-cam', 'ok', 'CAM·방'); };
@@ -132,6 +133,7 @@ async function startCam() {
 function pullRoomCam() {
   if (camSource !== 'room') return;
   const next = new Image();
+  next.crossOrigin = 'anonymous';
   next.onload = () => { roomCam.src = next.src; setTimeout(pullRoomCam, 250); };
   next.onerror = () => { roomCam.onerror(); };
   next.src = BRIDGE + '/camera.jpg?t=' + Date.now();
@@ -144,26 +146,35 @@ function frameB64() {
   return c.toDataURL('image/jpeg', .7).split(',')[1];
 }
 async function watch() {
-  if (camReady()) {
-    ex.drawImage(camEl(), 0, 0, 160, 120);
-    const d = ex.getImageData(0, 0, 160, 120).data;
-    const g = new Uint8Array(160 * 120);
-    for (let i = 0; i < g.length; i++) g[i] = (d[4 * i] + d[4 * i + 1] + d[4 * i + 2]) / 3;
-    let changed = 0;
-    if (state.prev) for (let i = 0; i < g.length; i++) if (Math.abs(g[i] - state.prev[i]) > 28) changed++;
-    state.prev = g; state.motion = changed / g.length;
-    $('motion-bar').style.width = Math.min(100, state.motion * 600) + '%';
-    // pixelate the eye view for the DOS look
-    ex.imageSmoothingEnabled = false; ex.drawImage(eye, 0, 0, 160, 120, 0, 0, 80, 60); ex.drawImage(eye, 0, 0, 80, 60, 0, 0, 160, 120);
-    const moving = state.motion > .06;
-    if (moving) state.lastMotion = Date.now();
-    state.streak = moving ? state.streak + 1 : 0;
-    if (state.mode === 'away' && state.streak >= 2 && !state.guardBusy) guard('motion');
-    const idle = (Date.now() - state.lastMotion) / 1000;
-    if (state.mode === 'home') $('eye-note').textContent = '아무도 안 보인 지 ' + Math.floor(idle) + '초';
-    if (state.mode === 'home' && idle > 30 && state.devicesOn && !state.guardBusy) guard('idle', idle);
+  try {
+    if (camReady()) {
+      ex.drawImage(camEl(), 0, 0, 160, 120);
+      const d = ex.getImageData(0, 0, 160, 120).data;
+      const g = new Uint8Array(160 * 120);
+      for (let i = 0; i < g.length; i++) g[i] = (d[4 * i] + d[4 * i + 1] + d[4 * i + 2]) / 3;
+      let changed = 0;
+      if (state.prev) for (let i = 0; i < g.length; i++) if (Math.abs(g[i] - state.prev[i]) > 28) changed++;
+      state.prev = g; state.motion = changed / g.length;
+      $('motion-bar').style.width = Math.min(100, state.motion * 600) + '%';
+      // pixelate the eye view for the DOS look
+      ex.imageSmoothingEnabled = false; ex.drawImage(eye, 0, 0, 160, 120, 0, 0, 80, 60); ex.drawImage(eye, 0, 0, 80, 60, 0, 0, 160, 120);
+      const moving = state.motion > .06;
+      if (moving) state.lastMotion = Date.now();
+      state.streak = moving ? state.streak + 1 : 0;
+      if (state.mode === 'away' && state.streak >= 2 && !state.guardBusy) guard('motion');
+      const idle = (Date.now() - state.lastMotion) / 1000;
+      if (state.mode === 'home') $('eye-note').textContent = '아무도 안 보인 지 ' + Math.floor(idle) + '초';
+      if (state.mode === 'home' && idle > 30 && state.devicesOn && !state.guardBusy) guard('idle', idle);
+    }
+  } catch {
+    state.prev = null; state.streak = 0;
+    chip('chip-cam', 'bad', 'CAM·읽기 실패');
+    $('eye-note').textContent = '카메라 영상을 읽지 못했어요. 다시 확인하고 있어요.';
+    // Reset a tainted canvas so the next valid frame can be read.
+    eye.width = eye.width;
+  } finally {
+    setTimeout(watch, 500);
   }
-  setTimeout(watch, 500);
 }
 async function guard(kind, idle = 0) {
   state.guardBusy = true;
