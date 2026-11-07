@@ -16,6 +16,8 @@ import sys
 import threading
 import time
 import urllib.request
+import urllib.parse
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -28,6 +30,7 @@ import guardian
 import kevin_agent
 import show_intent
 import song
+from ai_settings import AISettings, SettingsError, runtime_config, request_json as ai_json
 
 def _load_env_file():
     """Read KEY=VALUE lines from .openai.env next to the repo, if the shell did not set them."""
@@ -162,16 +165,10 @@ def openai_json(system: str, user_content, schema: dict, name: str, timeout=30, 
 
 
 def plan(text: str, current: dict) -> tuple[dict, str]:
-    """OpenAI first, on-device model second; explicit words always win (show_intent.ground)."""
-    if os.getenv('OPENAI_API_KEY', '').strip():
-        try:
-            raw = openai_json(show_intent.SYSTEM,
-                              json.dumps({'prompt': text, 'current_recipe': current}, ensure_ascii=False),
-                              show_intent.SCHEMA, 'kevin_plan')
-            return show_intent._validate(show_intent.ground(text, show_intent._validate(raw), current)), 'openai'
-        except Exception:
-            pass
-    return show_intent.interpret(text, current), 'local'
+    """Use the selected command AI, without a silent cross-provider fallback."""
+    from show_control import interpret
+    config = runtime_config()
+    return interpret(text, current, config), config['KEVIN_PLANNER']
 
 
 VISION_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': ['person', 'what'],
@@ -192,23 +189,26 @@ def see_person(jpeg_b64: str) -> tuple[bool | None, str]:
 
 
 class Bridge:
-    def __init__(self, controller=None):
+    def __init__(self, controller=None, ai=None, eye=None):
         if controller is None:
             from show_control import ShowController
             controller = ShowController()
         self.c = controller
+        self.ai = ai or AISettings()
         self.lock = threading.Lock()
         self.alarm_until = 0
-        self.eye = Eye()
+        self.eye = eye or Eye()
 
     def health(self):
         return {'ok': True, 'live': self.c.live_configured, 'camera': self.eye.jpeg() is not None,
                 'camera_error': self.eye.error, 'camera_name': self.eye.camera_name, 'voice': bool(os.getenv('ELEVENLABS_API_KEY', '').strip()),
-                'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()),
+                'openai': bool(os.getenv('OPENAI_API_KEY', '').strip()), 'ai': self.ai.public(),
                 'led': bool(os.getenv('KEVIN_LED_ADDRESS')), 'radio': os.getenv('KEVIN_RADIO_DEVICE') or None}
 
     def say(self, text):
         with self.lock:
+            if not self.ai.public()['configured']:
+                return {'reply': '먼저 명령 해석 AI를 설정해 주세요.', 'error': 'ai_setup_required'}
             self.history = getattr(self, 'history', [])
             prev = getattr(self, 'job_cancel', None)
             if prev:
@@ -219,10 +219,14 @@ class Bridge:
             summary = {'recipe': state.get('recipe'), 'led': getattr(self, 'led_now', 'scene'),
                        'radio': (state.get('radio') or {}).get('status')}
             try:
-                turn = kevin_agent.decide(text, self.history, summary, openai_json)
-                source = 'openai-agent'
+                config = runtime_config(self.ai.env)
+                def selected_json(system, content, schema, name, timeout=30, model=None):
+                    return ai_json(system, content, schema, config)
+                turn = kevin_agent.decide(text, self.history, summary, selected_json)
+                source = config['KEVIN_PLANNER'] + '-agent'
             except Exception:
-                return self._say_plan(text)
+                self.ai.mark_failed()
+                return {'reply': 'AI 연결을 확인해 주세요. 설정에서 다시 확인할 수 있어요.', 'error': 'ai_unavailable'}
             self.history += [{'who': '사람', 'text': text}, {'who': 'KEVIN', 'text': turn['reply']}]
             self.history = self.history[-20:]
             threading.Thread(target=self._act, args=(turn, cancel), daemon=True).start()
@@ -281,19 +285,6 @@ class Bridge:
         with self.c.lock:
             self.c.state['radio'] = dict(result or {}, audible_verified=False)
 
-    def _say_plan(self, text):
-        state = self.c.get_state()
-        current = dict(state.get('recipe') or {})
-        p, source = plan(text, current)
-        if p['mode'] == 'unsupported':
-            return {'reply': p['explanation'], 'plan': p, 'source': source}
-        if p['mode'] == 'stop':
-            self.c.stop()
-            return {'reply': p['explanation'], 'plan': p, 'source': source}
-        self.c.planner = self._once(p)
-        self.c.command(text, self.c.live_configured)
-        return {'reply': p['explanation'], 'plan': p, 'source': source}
-
     def _once(self, plan):
         """A planner the show job reads exactly once, so the job thread can never miss it."""
         def planner(_text, _recipe):
@@ -342,17 +333,22 @@ def make_handler(bridge):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, data):
+        def _send(self, code, data, private=False):
             body = json.dumps(data, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Private-Network', 'true')
+            if not private:
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Private-Network', 'true')
+            else:
+                self.send_header('Cache-Control', 'no-store')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
         def do_OPTIONS(self):
+            if self.path.startswith('/ai/'):
+                return self._send(403, {'error': '로컬 앱에서 AI 설정을 열어 주세요.'}, private=True)
             self.send_response(204)
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -381,6 +377,13 @@ def make_handler(bridge):
             return True
 
         def do_GET(self):
+            if self.path == '/ai/config':
+                if not self._ai_access():
+                    return
+                try:
+                    return self._send(200, {'settings': bridge.ai.public(), 'csrf': bridge.ai.csrf}, private=True)
+                except SettingsError as error:
+                    return self._send(400, {'error': str(error)}, private=True)
             if self.path.startswith('/health'):
                 return self._send(200, bridge.health())
             if self.path.startswith('/camera.jpg'):
@@ -404,6 +407,8 @@ def make_handler(bridge):
                 self._send(404, {'error': 'not found'})
 
         def do_POST(self):
+            if self.path.startswith('/ai/'):
+                return self._ai_post()
             try:
                 n = int(self.headers.get('Content-Length', '0'))
                 body = json.loads(self.rfile.read(min(n, 4_000_000)) or b'{}')
@@ -431,6 +436,46 @@ def make_handler(bridge):
                 self._send(404, {'error': 'not found'})
             except Exception as exc:
                 self._send(400, {'error': str(exc)[:200], 'reply': '어, 뭔가 꼬였어. 다시 말해줄래?'})
+
+        def _ai_access(self, write=False):
+            # Protect the new credential-writing surface from hosted pages and DNS rebinding.
+            host = self.headers.get('Host', '')
+            try:
+                parsed = urllib.parse.urlsplit('http://' + host)
+                allowed = {'127.0.0.1', 'localhost', '::1', self.server.server_address[0]}
+                valid = (parsed.hostname in allowed and (parsed.port or 80) == self.server.server_port and
+                         not parsed.username and not parsed.password and not parsed.path)
+            except ValueError:
+                valid = False
+            origin = self.headers.get('Origin')
+            if not valid or origin not in (None, 'http://' + host):
+                self._send(403, {'error': '로컬 앱에서 AI 설정을 열어 주세요.'}, private=True)
+                return False
+            if write and not hmac.compare_digest(self.headers.get('X-KEVIN-Setup', '').encode(), bridge.ai.csrf.encode()):
+                self._send(403, {'error': '설정을 다시 열어 주세요.'}, private=True)
+                return False
+            return True
+
+        def _ai_post(self):
+            if not self._ai_access(write=True):
+                return
+            try:
+                n = int(self.headers.get('Content-Length', '0'))
+                if not 0 < n <= 8192 or self.headers.get_content_type() != 'application/json':
+                    return self._send(400, {'error': 'AI 설정 요청 형식을 확인하세요.'}, private=True)
+                body = json.loads(self.rfile.read(n))
+                if not isinstance(body, dict):
+                    raise SettingsError('AI 설정 요청 형식을 확인하세요.')
+                if self.path == '/ai/test' and set(body) == {'draft'}:
+                    return self._send(200, bridge.ai.test(body['draft']), private=True)
+                if self.path == '/ai/save' and set(body) == {'draft', 'test_id'}:
+                    result = bridge.ai.save(body['draft'], body['test_id'])
+                    return self._send(200, {'settings': result}, private=True)
+                raise SettingsError('AI 설정 요청 형식을 확인하세요.')
+            except SettingsError as error:
+                self._send(400, {'error': str(error)}, private=True)
+            except Exception:
+                self._send(400, {'error': 'AI 설정을 처리하지 못했습니다.'}, private=True)
     return Handler
 
 
@@ -442,7 +487,8 @@ WARM_LINES = ['안녕, 난 케빈이야. 이 집은 내가 맡을게. 말 걸어
 def warm_up():
     """Open the OpenAI/ElevenLabs connections and cache fixed lines so the first request is fast."""
     try:
-        plan('하늘 그대로 둬', {})
+        if AISettings().public()['configured']:
+            plan('하늘 그대로 둬', {})
     except Exception:
         pass
     for line in WARM_LINES:
