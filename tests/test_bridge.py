@@ -1,6 +1,7 @@
-import threading
+import tempfile
 import time
 import unittest
+from unittest.mock import Mock, patch
 
 import kevin_bridge
 from show_control import ShowController
@@ -38,13 +39,19 @@ class BridgeTests(unittest.TestCase):
     def test_new_request_replaces_the_one_in_flight(self):
         led = SlowLed()
         c = ShowController(transport=led, radio=Radio(), config={'KEVIN_SHOW_LIVE': '1', 'KEVIN_LED_ADDRESS': 'x', 'KEVIN_RADIO_DEVICE': 'CRF-35B'})
-        bridge = kevin_bridge.Bridge.__new__(kevin_bridge.Bridge)
-        bridge.c, bridge.lock, bridge.alarm_until = c, threading.Lock(), 0
-        kevin_bridge.plan = lambda text, cur: ({'mode': 'update', 'preset': 'santa' if '산타' in text else 'christmas_train', 'speed': None,
-                                               'snow': 'keep', 'sky': 'keep', 'music': 'keep', 'volume': None, 'explanation': 'ok'}, 'test')
-        first = bridge.say('기차')
-        time.sleep(.3)
-        second = bridge.say('산타')
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        settings = Mock()
+        settings.public.return_value = {'configured': True}
+        settings.env = {'KEVIN_AI_CONFIG': tmp.name + '/ai.json', 'KEVIN_PLANNER': 'ollama'}
+        bridge = kevin_bridge.Bridge(controller=c, ai=settings, eye=Mock())
+        def decide(text, *args):
+            return {'reply': 'ok', 'led': {'mode': 'scene', 'preset': 'santa' if '산타' in text else 'christmas_train',
+                    'snow': 'keep', 'sky': 'keep'}, 'music': {'mode': 'keep', 'volume': None}}
+        with patch('kevin_bridge.kevin_agent.decide', side_effect=decide):
+            first = bridge.say('기차')
+            time.sleep(.3)
+            second = bridge.say('산타')
         self.assertNotIn('busy', first)
         self.assertNotIn('busy', second)
         end = time.time() + 6
