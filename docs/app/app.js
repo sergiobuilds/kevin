@@ -1,6 +1,6 @@
 // KEVIN web: DOS-style face, browser webcam and voice, devices through the local bridge.
 const params = new URLSearchParams(location.search);
-const BRIDGE = params.get('bridge') || (location.port === '8787' ? location.origin : 'http://127.0.0.1:8787');
+const BRIDGE = params.get('bridge') || (location.hostname.endsWith('github.io') ? 'http://127.0.0.1:8787' : location.origin);
 const $ = (id) => document.getElementById(id);
 const scene = $('scene'), sx = scene.getContext('2d');
 const eye = $('eye'), ex = eye.getContext('2d', { willReadFrequently: true });
