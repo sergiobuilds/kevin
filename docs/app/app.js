@@ -58,11 +58,12 @@ async function health() {
     const h = await call('/health');
     state.bridge = true;
     chip('chip-bridge', 'ok', 'BRIDGE 연결됨');
-    chip('chip-ai', h.openai ? 'ok' : 'warn', h.openai ? 'AI·OpenAI' : 'AI·LOCAL');
+    window.KevinAI.update(h.ai);
     chip('chip-led', h.live && h.led ? 'ok' : 'warn');
     chip('chip-radio', h.live && h.radio ? 'ok' : 'warn');
   } catch { state.bridge = false; chip('chip-bridge', 'bad', 'BRIDGE 꺼짐'); }
 }
+window.addEventListener('kevin-ai-saved', health);
 
 async function ask(text) {
   text = text.trim(); if (!text) return;
@@ -257,6 +258,7 @@ $('mic').onclick = listen;
 $('stop').onclick = stopAll;
 document.querySelectorAll('.modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 document.addEventListener('keydown', (e) => {
+  if (document.getElementById('ai-settings').open) return;
   if (e.key === 'Escape') { e.preventDefault(); stopAll(); }
   if (e.key === 'F1') { e.preventDefault(); setMode('talk'); }
   if (e.key === 'F2') { e.preventDefault(); setMode('away'); }

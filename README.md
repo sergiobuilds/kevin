@@ -274,32 +274,18 @@ $env:KEVIN_CAMERA_ROI   = "x,y,w,h"      # 카메라 화면 속 기기 위치 (�
 | Ctrl+L | 이번 요청의 미리보기 ↔ 실물 전환. 제출 후 미리보기로 돌아감 |
 | Esc | 모든 기기 정지 |
 
-## 선택 옵션: OpenAI Luna
+## AI 설정
 
-기본은 기존 로컬 Ollama입니다. `OPENAI_API_KEY`를 실행 환경에 설정한 뒤 명시적으로 선택하면
-OpenAI API의 `gpt-6-luna`가 같은 연출 계획을 만듭니다. 추가 Python 패키지는 필요 없습니다.
+케빈이 명령을 이해하는 방식을 선택하세요.
 
-```sh
-./kevin --planner openai
-# Windows: .\kevin.cmd --planner openai
-```
+- **이 컴퓨터에서 실행** — Ollama에 설치된 로컬 모델을 사용합니다.
+- **내 API 키로 연결** — 내 OpenAI API 키를 사용합니다. 사용량에 따라 API 요금이 발생합니다.
 
-`KEVIN_PLANNER=openai` 환경변수로도 선택할 수 있어 MCP의 `say`에도 적용됩니다.
-CLI의 `--planner`가 환경변수보다 우선하며, 키가 있다는 이유로 자동 전환하지 않습니다.
-이 선택은 터미널과 MCP `say`에 적용됩니다. 웹 브리지와 지킴이 모드는 각각 기존 모델 선택을 사용합니다.
-선택 설정은 `KEVIN_OPENAI_MODEL`(기본 `gpt-6-luna`),
-`KEVIN_OPENAI_TIMEOUT`(기본 30초, 최대 120초)입니다.
-모델 선택은 실물 실행 선택과 독립적입니다. `--live`와 기존 장비 설정은 그대로 필요합니다.
+처음 실행할 때 설정하고, 이후에는 웹 상단의 **AI 설정** 또는 `./kevin --setup`에서 변경할 수 있습니다.
+연결 확인은 고정된 시험 요청만 보내며 기기를 움직이지 않습니다. 웹·터미널·MCP `say`는 같은 설정을 사용합니다.
+MCP의 직접 기기 도구는 내부 AI 설정 없이 사용할 수 있습니다. 음성·카메라는 별도 연결을 따릅니다.
 
-OpenAI를 선택하면 요청 텍스트와 현재 연출 설정이 외부 API로 전송됩니다.
-키·장비 주소·음성 파일은 계획 본문에 넣지 않습니다. API 키는 프로세스 환경에만 두고 커밋하지 마세요.
-Responses API에 `store:false`를 보내지만 기본 모니터링 로그까지 비활성화하는 옵션은 아닙니다.
-API 키 오류·거절·시간 초과·불완전한 계획에는 실행하지 않으며 다른 모델로 자동 재시도하지 않습니다.
-Luna 응답은 로컬 스키마 검증을 거쳐 기존 컨트롤러로 전달합니다.
-
-참고: [Luna 모델](https://developers.openai.com/api/docs/models/gpt-6-luna),
-[구조화 출력](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses),
-[API 데이터 정책](https://developers.openai.com/api/docs/guides/your-data).
+[자세한 설정 안내](docs/AI_SETUP.md)
 
 ## 사용한 오픈소스와 기술
 
@@ -307,7 +293,7 @@ Luna 응답은 로컬 스키마 검증을 거쳐 기존 컨트롤러로 전달�
 |---|---|
 | 에이전트 연결 | [Model Context Protocol](https://modelcontextprotocol.io) (stdio, JSON-RPC 2.0) |
 | LED 전광판 | [pypixelcolor](https://github.com/lucagoc/pypixelcolor) 0.5.0, [Bleak](https://github.com/hbldh/bleak) / 참고: [go-ipxl](https://github.com/yyewolf/go-ipxl), [ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color) |
-| 대화·판단 | OpenAI GPT-5.4 (Responses API, 구조화 출력), OpenAI 비전(침입 판단), 오프라인 대체: Ollama qwen2.5 3B |
+| 대화·판단 | AI 설정에서 Ollama 또는 OpenAI 선택(기본 모델 qwen2.5 3B / Luna), 카메라의 OpenAI 비전은 별도 연결 |
 | 목소리 | ElevenLabs (eleven_multilingual_v2) |
 | 영수증 | OpenCV 캡처, Pillow 전후 비교, [cryptography](https://cryptography.io) Ed25519 |
 | 음성 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (선택) |

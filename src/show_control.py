@@ -25,6 +25,8 @@ DEFAULT_RECIPE = dict(preset='christmas_train', speed=1, snow='normal', sky=None
 
 
 def interpret(prompt, recipe, config):
+    from ai_settings import runtime_config
+    config = runtime_config(config)
     provider = config.get('KEVIN_PLANNER', 'ollama')
     if provider == 'openai':
         module = importlib.import_module('openai_planner')
@@ -33,7 +35,7 @@ def interpret(prompt, recipe, config):
         raise ShowError('KEVIN_PLANNER must be ollama or openai')
     module = importlib.import_module('show_intent')
     return module.interpret(prompt, recipe, endpoint=config.get('KEVIN_OLLAMA_URL'),
-                            model=config.get('KEVIN_OLLAMA_MODEL'))
+                            model=config.get('KEVIN_OLLAMA_MODEL'), no_redirect=True)
 
 
 def normalized_plan(plan):
@@ -337,7 +339,7 @@ class ShowController:
                 'audio': ('전광판은 바꿨는데 ' if visual_applied else '') +
                          '라디오 설정을 못 바꿨어. 소리 출력에 라디오 연결됐는지 봐줘.',
             }
-            if stage == 'planning' and self.config.get('KEVIN_PLANNER') == 'openai':
+            if stage == 'planning':
                 from openai_planner import OpenAIPlanError
                 if isinstance(error, OpenAIPlanError):
                     # Only this planner's explicitly redacted public messages.
