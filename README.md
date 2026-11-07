@@ -2,9 +2,11 @@
 
 <img src="assets/brand/banner.png" alt="KEVIN" width="100%">
 
-# KEVIN — 세상을 보고, 세상의 기기를 부리는 VLM 에이전트
+# KEVIN — 이제 백수의 일자리까지 위험합니다
 
-### 앱도 API도 없는 물리 세계를, AI가 직접 보고·이해하고·움직입니다.
+### 자택경비원부터 굴삭기까지. AI가 API 없던 옛날 기기의 API를 스스로 얻어, 직접 보고 움직입니다.
+
+세상을 보는 VLM 에이전트 · 앱도 API도 없는 기기를 AI의 손으로
 
 **[웹에서 케빈 만나기](https://sergiobuilds.github.io/kevin/)** · [로드맵](ROADMAP.md) · [사업성](docs/BUSINESS.md) · [브랜드](docs/BRAND.md)
 
