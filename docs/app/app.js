@@ -146,16 +146,43 @@ async function guard(kind, idle = 0) {
 }
 
 // ---------- scene: 320x200 VGA ----------
-let walkX = 150, dir = 1;
+// Pokemon-style NPC: step one tile, stop, look around, sometimes turn in place.
+const TILE = 10, AREA = { x0: 9, x1: 25, y0: 10, y1: 14 };   // walkable floor in tiles (320x200)
+const npc = { tx: 16, ty: 12, x: 160, y: 120, face: 1, from: null, t0: 0, wait: 1500, last: 0 };
+function npcThink(now) {
+  if (npc.from || now - npc.last < npc.wait) return;
+  npc.last = now;
+  npc.wait = 700 + Math.random() * 2200;
+  if (Math.random() < .3) { npc.face = Math.random() < .5 ? -1 : 1; return; }   // just look around
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => {
+    const nx = npc.tx + dx, ny = npc.ty + dy;
+    return nx >= AREA.x0 && nx <= AREA.x1 && ny >= AREA.y0 && ny <= AREA.y1;
+  });
+  const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+  if (dx) npc.face = dx;
+  npc.from = { x: npc.x, y: npc.y }; npc.tx += dx; npc.ty += dy; npc.t0 = now;
+}
+function npcMove(now) {
+  if (!npc.from) return 0;
+  const k = Math.min(1, (now - npc.t0) / 380);              // one tile in ~0.4s, like walking in-game
+  npc.x = npc.from.x + (npc.tx * TILE - npc.from.x) * k;
+  npc.y = npc.from.y + (npc.ty * TILE - npc.from.y) * k;
+  if (k >= 1) npc.from = null;
+  return k < 1 ? Math.floor(k * 4) % 2 : 0;                 // two-frame step bob
+}
 function draw(t) {
   sx.imageSmoothingEnabled = false;
   if (state.view === 'room') {
     if (IMG.room.complete) sx.drawImage(IMG.room, 0, 0, 320, 200);
-    walkX += dir * .35; if (walkX > 250 || walkX < 70) dir *= -1;
+    npcThink(t);
+    const step = npcMove(t);
     if (IMG.walker.complete) {
-      const h = 46, w = h * IMG.walker.width / IMG.walker.height, y = 138 + Math.sin(t / 180) * 1.2;
-      sx.save(); if (dir < 0) { sx.translate(walkX * 2 + w, 0); sx.scale(-1, 1); }
-      sx.drawImage(IMG.walker, walkX, y, w, h); sx.restore();
+      const h = 46, w = Math.round(h * IMG.walker.width / IMG.walker.height);
+      const x = Math.round(npc.x - w / 2), y = Math.round(npc.y - h + 8 - step);
+      sx.save();
+      if (npc.face < 0) { sx.translate(x * 2 + w, 0); sx.scale(-1, 1); }
+      sx.drawImage(IMG.walker, x, y, w, h);
+      sx.restore();
     }
   } else {
     sx.fillStyle = state.mode === 'away' ? '#2a0610' : '#341a3a'; sx.fillRect(0, 0, 320, 200);
