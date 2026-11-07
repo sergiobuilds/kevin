@@ -300,13 +300,13 @@ class Bridge:
                 self.c.radio.audio_path.write_bytes(wav)
                 self.c.audio_prepared = True
                 check_cancel(cancel)
-                self._radio(self.c.radio.play(music['volume'] or 60, cancel))
+                self._radio(self.c.radio.play(music['volume'] if music['volume'] is not None else 60, cancel))
             elif music['mode'] == 'carol' and led['mode'] != 'scene':
                 self.c.radio.close()
                 self.c.audio_prepared = False
                 self.c._prepare_audio(cancel)
                 check_cancel(cancel)
-                self._radio(self.c.radio.play(music['volume'] or 60, cancel))
+                self._radio(self.c.radio.play(music['volume'] if music['volume'] is not None else 60, cancel))
             elif music['mode'] == 'stop' and led['mode'] != 'scene':
                 self._radio(self.c.radio.stop())
         except Exception as exc:

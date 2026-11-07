@@ -97,3 +97,13 @@ class BridgeSafetyTests(unittest.TestCase):
                     'music': {'mode': 'carol', 'volume': 0}}
             bridge._act(turn, bridge.job_cancel)
             self.assertIsNone(bridge.c.applied_scene)
+
+
+    def test_native_commands_keep_zero_volume(self):
+        for mode in ('text', 'score', 'clear'):
+            bridge = self.bridge()
+            turn = {'reply': 'ok', 'led': {'mode': mode, 'text': 'hello', 'animation': 'static',
+                    'color': '#ffffff', 'bg': '', 'score_left': 1, 'score_right': 2},
+                    'music': {'mode': 'carol', 'volume': 0}}
+            bridge._act(turn, bridge.job_cancel)
+            bridge.c.radio.play.assert_called_once_with(0, bridge.job_cancel)
