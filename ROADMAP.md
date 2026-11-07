@@ -145,7 +145,7 @@ Kevin는 하나의 원리로 넓어집니다. **연결(원래 통신법 → 도�
 - **시연:** 외출 모드에서 웹캠에 켜진 가스불이 보이면 케빈이 “가스 켜져 있어서 잠갔어.”라고 말하고 밸브를 잠근다. 아무도 없는데 켜진 멀티탭은 끈다.
 - **통신:** 가스 밸브 잠금기(Zigbee·IR), 스마트 플러그(Tasmota·Tuya 로컬 LAN)
 - **출발점 오픈소스:** zigbee2mqtt, Tasmota, tinytuya
-- **현재 근거:** \`src/guardian.py\`의 관찰 → 추론 → 규칙 확인 → 실행 흐름과 절약(power_save) 동작 구현. 잠금 장치는 미확보
+- **현재 근거:** `src/guardian.py`의 관찰 → 추론 → 규칙 확인 → 실행 흐름과 절약(power_save) 동작 구현. 잠금 장치는 미확보
 - **완료 기준:** 실제 밸브·플러그를 지킴이 모드에서 1회 이상 스스로 잠그고 끄며, 사람이 있을 때는 끄지 않는다
-- **코드 위치:** \`src/devices/energy.py\`, 테스트 \`tests/test_device_energy.py\`
-- **브랜치:** \`device/energy\`
+- **코드 위치:** `src/devices/energy.py`, 테스트 `tests/test_device_energy.py`
+- **브랜치:** `device/energy`
