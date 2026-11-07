@@ -344,6 +344,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 에이전트가 웹을 넘어 실물을 다루기 시작하면, 기기 연결과 실제로 일어난 일의 기록이 반드시 필요해집니다. 연결 하나를 같은 기기를 가진 모든 고객과 에이전트가 다시 쓰므로, 동일 모델의 어댑터를 재사용할 수 있습니다. 새 기종 지원·설치·유지보수 비용과 지불 의사는 아직 검증하지 않았습니다. 고객층과 추산은 [BUSINESS.md](docs/BUSINESS.md)에 있습니다.
 
+## 라이선스
+
+KEVIN은 [PolyForm Noncommercial 1.0.0](LICENSE)으로 공개합니다. 개인 학습·연구·비영리 목적으로는 자유롭게 보고 고쳐 쓸 수 있습니다. 회사 제품·유료 서비스·영업 활동 등 상업적 사용은 KEVIN 팀의 별도 서면 허락이 필요합니다. 문의는 GitHub 이슈로 남겨 주세요.
+
+함께 쓰는 오픈소스(pypixelcolor·python-wled·python-broadlink 등)는 각자의 라이선스를 따르며, 이 저장소에 복사하지 않고 의존성으로 설치합니다.
+
 ## 팀
 
 OBA.RUN 2nd 해커톤 출품작입니다.

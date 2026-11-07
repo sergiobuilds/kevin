@@ -96,6 +96,6 @@ PYTHONPATH=src python3 -m unittest discover -s tests -p test_receipt.py -v
 
 KEVIN은 MCP 연결, 허용된 기기 동작, 제어와 관측 기록을 결합합니다. 프로토콜은 pypixelcolor·Bleak, python-wled, adb-shell, python-broadlink 등 기존 구현을 활용합니다. 개별 프로토콜이나 Ed25519를 새로 발명했다는 주장이 아닙니다. 연결 하나를 여러 에이전트가 재사용하고, 기기 응답과 관측을 구분해서 돌려주는 구조가 제품의 설계 방향입니다.
 
-오픈소스별 역할·라이선스·연결 조건은 [README](https://github.com/sergiobuilds/kevin/blob/ab0a856/README.md), [확장 데모](HACKATHON_DEMO.md), [TV](TRACK_05_TV.md), [IR](TRACK_06_IR.md), [HA·Valetudo](TRACKS_04_07.md)에 있습니다. KEVIN 자체 라이선스는 [MIT](https://github.com/sergiobuilds/kevin/blob/ab0a856/LICENSE)입니다.
+오픈소스별 역할·라이선스·연결 조건은 [README](https://github.com/sergiobuilds/kevin/blob/ab0a856/README.md), [확장 데모](HACKATHON_DEMO.md), [TV](TRACK_05_TV.md), [IR](TRACK_06_IR.md), [HA·Valetudo](TRACKS_04_07.md)에 있습니다. KEVIN 자체 라이선스는 [PolyForm Noncommercial 1.0.0](../LICENSE)입니다. 상업적 사용은 별도 허락이 필요합니다.
 
 에이전트 플랫폼의 기기 도구 팩, 매장의 기존 간판·오디오 제어, 기존 설비 연결은 확장 가능한 사용처로 검토하고 있습니다. 유료 고객·계약·매출·기기별 유지보수 비용을 검증한 상태는 아닙니다. 미지 통신 규격의 자율 발견, 모든 기기의 즉석 학습, 범용 실물 실패 복구도 현재 완료 범위에 포함하지 않습니다.
