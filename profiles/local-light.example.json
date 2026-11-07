@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "id": "christmas",
+      "name": "크리스마스 전광판과 라디오",
+      "aliases": ["전광판", "라디오"],
+      "adapter": "christmas_show",
+      "config": {}
+    },
+    {
+      "id": "shelf",
+      "name": "진열대 조명",
+      "aliases": ["진열대"],
+      "adapter": "wled",
+      "config": {"url_env": "KEVIN_WLED_URL", "segment_ids": [0, 1, 2]}
+    }
+  ]
+}

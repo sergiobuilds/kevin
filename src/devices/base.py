@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 @dataclass(frozen=True)
 class Capability:
-    """One thing the AI may ask this device to do, e.g. `speed` 0.5..2."""
+    """One allowed field: a bounded scalar, object or array (e.g. light zones)."""
     name: str
     description: str
     schema: dict[str, Any]
@@ -22,7 +22,7 @@ class Capability:
 
 @dataclass
 class Result:
-    status: str                      # "acknowledged" | "sent_unverified" | "failed" | "stopped"
+    status: str                      # acknowledged | sent_unverified | state_reported | failed | stopped
     physically_verified: bool = False
     detail: dict[str, Any] = field(default_factory=dict)
 
@@ -34,6 +34,10 @@ class DeviceAdapter(Protocol):
       rejected before it reaches the adapter.
     - `apply` must return promptly once `cancel` is set (Esc stops everything).
     - `stop` must leave the device in a safe, quiet state and be idempotent.
+      It cancels owned activity, not by guessing a previous state or replaying a toggle.
+    - Optional `validate(changes)` and `ready()` hooks must be side-effect-free.
+      All selected adapters are checked before the first write.
+    - Result detail/status contain public functional state, never addresses or tokens.
     - Tests use a simulator; real hardware runs only with `--live`.
     """
 

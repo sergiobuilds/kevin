@@ -93,6 +93,8 @@ class ShowController:
         self.closed = False
         self.audio_prepared = False
         self.applied_scene = None
+        self.live_recipe = copy.deepcopy(DEFAULT_RECIPE)
+        self.live_scene = None
         self.state = dict(status='idle', message='명령을 입력하세요.', job_id=None, revision=0,
                           recipe=copy.deepcopy(DEFAULT_RECIPE),
                           transport={'status': 'not_sent', 'physical_verified': False},
@@ -134,8 +136,9 @@ class ShowController:
                 raise ShowError('show job active; stop it before another command')
             cancel = self.cancel = threading.Event()
             job_id = uuid.uuid4().hex
-            recipe = copy.deepcopy(self.state['recipe'])
-            current = copy.deepcopy(scene if scene is not None else self.state.get('scene'))
+            recipe = copy.deepcopy(self.live_recipe if execute else self.state['recipe'])
+            current = copy.deepcopy(scene if scene is not None else
+                                    self.live_scene if execute else self.state.get('scene'))
             self.state.update(status='queued', job_id=job_id, message='명령 대기 중',
                               transcript=prompt.strip())
             self.state.pop('plan', None)
@@ -238,6 +241,10 @@ class ShowController:
                 check_cancel(cancel)
                 self._update(cancel, radio=self.radio.stop())
             self._update(cancel, status='complete', message='명령 처리 완료. LED ACK와 재생 상태이며 실제 화면·청취 확인은 별도입니다.')
+            with self.lock:
+                self._update(cancel)
+                self.live_recipe = copy.deepcopy(recipe)
+                self.live_scene = copy.deepcopy(scene)
         except Cancelled:
             return
         except Exception:
@@ -302,6 +309,7 @@ class ShowController:
                 return {'status': 'stopping', 'job_id': self.state['job_id']}
             self.state.update(status='stopping', message='정지 중: 대기 작업을 취소했습니다.')
             self.state['recipe']['music'] = 'stop'
+            self.live_recipe['music'] = 'stop'
             self.applied_scene = None
         try:
             radio = self.radio.stop()

@@ -80,12 +80,12 @@ def read_key():
 class Backend:
     """In-process show controller. Real devices are touched only with --live."""
 
-    def __init__(self, live=False):
-        from show_control import ShowController
+    def __init__(self, live=False, profile=None):
+        from device_control import DeviceController
         config = dict(os.environ)
         config['KEVIN_SHOW_LIVE'] = '1' if live else '0'
         self.live = live
-        self.local = ShowController(config=config)
+        self.local = DeviceController(config=config, profile=profile)
 
     def request(self, action, body=None):
         if action == 'state':
@@ -248,13 +248,13 @@ class Game:
                     self.message = result.get('message', status or '상태 확인 중')
                     if status in ('sending', 'audio'):
                         self.mode = 'acting'
-                        self.target = 'led' if status == 'sending' else 'radio'
+                        self.target = 'device'
                     elif status in ('queued', 'planning', 'rendering', 'stopping'):
                         pass
                     else:
                         self.waiting = False
                         self.job = None
-                        self.mode = 'error' if status in ('error', 'unsupported') else 'stopped' if status == 'stopped' else 'room'
+                        self.mode = 'error' if status in ('error', 'unsupported', 'clarify') else 'stopped' if status == 'stopped' else 'room'
                         if status == 'stopped':
                             self.executing_live = False
         if not self.pending and not self.request_pending and time.monotonic() >= self.poll_at:
@@ -296,10 +296,21 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='터미널 안에서 실행되는 컬러 AI 게임')
     parser.add_argument('--live', action='store_true',
                         help='실제 LED 전광판과 블루투스 라디오로 내보냅니다. 없으면 미리보기만 합니다.')
+    parser.add_argument('--profile', help='명시적으로 등록한 기기의 JSON 프로필')
+    parser.add_argument('--list-devices', action='store_true', help='프로필의 이름·허용 기능만 표시하고 종료')
     args = parser.parse_args(argv)
-    if not sys.stdin.isatty() or not sys.stdout.isatty():
+    if not args.list_devices and (not sys.stdin.isatty() or not sys.stdout.isatty()):
         parser.error('실제 터미널에서 실행해 주세요. 브라우저는 사용하지 않습니다.')
-    backend = Backend(args.live)
+    try:
+        backend = Backend(args.live, args.profile)
+    except ValueError as error:
+        parser.error(str(error))
+    if args.list_devices:
+        try:
+            print(json.dumps(backend.local.registry.catalog(), ensure_ascii=False, indent=2))
+        finally:
+            backend.close()
+        return
     game = Game(backend)
     try:
         with terminal_session():

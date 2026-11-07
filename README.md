@@ -89,6 +89,10 @@ AI가 기기를 마음대로 조작하지 않도록 경계를 두었습니다.
 
 ## 실행
 
+기존 전광판·라디오 외 기기는 [기기 프로필](docs/DEVICE_PROFILES.md)로 등록합니다.
+직접 WLED와 선택형 Home Assistant 스위치·학습 IR 예제를 제공합니다.
+10개 트랙별 확장안과 공통 실행기의 범위는 [유즈케이스 정렬](docs/USE_CASE_ALIGNMENT.md)을 참고하세요.
+
 Python 3.10 이상이 필요합니다.
 
 ```sh

@@ -109,6 +109,9 @@ def ground(prompt, spec, current):
     current = current or {}
     out = dict(spec)
     keep = {"preset": "keep", "speed": None, "snow": "keep", "sky": "keep", "music": "keep", "volume": None}
+    # A model refusal must never become a partial execution after grounding.
+    if out["mode"] == "unsupported":
+        return out
     if _STOP_ALL.search(text):
         return dict(out, mode="stop", **dict(keep, music="stop"))
     if "산타" in text or re.search(r"santa", text, re.I):
@@ -118,7 +121,12 @@ def ground(prompt, spec, current):
     elif not re.search(r"크리스마스|christmas|장면|scene", text, re.I):
         out["preset"] = "keep"
     if _MUSIC.search(text):
-        out["music"] = "stop" if _OFF.search(text) and not _ON.search(text) else "play"
+        if _OFF.search(text) and not _ON.search(text):
+            out["music"] = "stop"
+        elif _ON.search(text):
+            out["music"] = "play"
+        else:
+            out["music"] = "keep"
     else:
         out["music"] = "keep"
     if _SNOW.search(text):
@@ -143,7 +151,7 @@ def ground(prompt, spec, current):
     if not changed:
         return dict(out, mode="unsupported", **keep,
                     explanation="지금 연결된 기기로는 할 수 없는 요청이에요.")
-    if out["mode"] in ("stop", "unsupported"):
+    if out["mode"] == "stop":
         out["mode"] = "update" if current else "start"
     return out
 
@@ -154,6 +162,13 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
         raise IntentError("연출 요청은 1–2000자여야 합니다.")
     if current_recipe is not None and not isinstance(current_recipe, dict):
         raise IntentError("현재 연출은 객체여야 합니다.")
+    spec = request_json(SYSTEM, {"prompt": prompt.strip(), "current_recipe": current_recipe},
+                        SCHEMA, endpoint=endpoint, model=model)
+    return _validate(ground(prompt, _validate(spec), current_recipe))
+
+
+def request_json(system, content, schema, endpoint=None, model=None):
+    """One bounded Ollama request; callers validate the domain contract locally."""
     base = endpoint if endpoint is not None else os.getenv("KEVIN_OLLAMA_URL", "http://127.0.0.1:11434")
     selected = model if model is not None else os.getenv("KEVIN_OLLAMA_MODEL", "qwen2.5:3b")
     if not isinstance(base, str) or not isinstance(selected, str) or not selected.strip():
@@ -168,15 +183,15 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
         timeout = float(os.getenv("KEVIN_OLLAMA_TIMEOUT", "180"))
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError()
-        content = json.dumps({"prompt": prompt.strip(), "current_recipe": current_recipe}, ensure_ascii=False, allow_nan=False)
+        content = json.dumps(content, ensure_ascii=False, allow_nan=False)
         if len(content) > 16000:
             raise ValueError()
     except (ValueError, TypeError):
         raise IntentError("Ollama 설정 또는 현재 연출 데이터가 올바르지 않습니다.") from None
     body = {
-        "model": selected, "stream": False, "think": False, "format": SCHEMA,
+        "model": selected, "stream": False, "think": False, "format": schema,
         "options": {"temperature": 0, "num_predict": 600},
-        "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": content}],
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}],
     }
     for attempt in range(2):
         request = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
@@ -191,7 +206,7 @@ def interpret(prompt, current_recipe, endpoint=None, model=None):
             message = result.get("message")
             if not isinstance(message, dict) or not isinstance(message.get("content"), str):
                 raise IntentError("AI 응답에 해석 결과가 없습니다.")
-            return _validate(ground(prompt, _validate(json.loads(message["content"])), current_recipe))
+            return json.loads(message["content"])
         except urllib.error.HTTPError as exc:
             try:
                 detail = exc.read(2048).decode("utf-8", errors="replace").lower()

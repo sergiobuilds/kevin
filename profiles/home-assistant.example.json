@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "id": "lamp",
+      "name": "거실 램프",
+      "aliases": ["램프"],
+      "adapter": "ha_switch",
+      "config": {"url_env": "KEVIN_HA_URL", "token_env": "KEVIN_HA_TOKEN", "entity_id": "switch.replace_me"}
+    },
+    {
+      "id": "tv",
+      "name": "거실 TV",
+      "aliases": ["텔레비전"],
+      "adapter": "ha_remote",
+      "config": {
+        "url_env": "KEVIN_HA_URL",
+        "token_env": "KEVIN_HA_TOKEN",
+        "entity_id": "remote.replace_me",
+        "device": "replace_with_learned_device_name",
+        "commands": {"hdmi1": "replace_with_learned_command_name"}
+      }
+    }
+  ]
+}
