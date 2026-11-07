@@ -1,6 +1,6 @@
 # KEVIN 실행·관찰 데모
 
-기존 LED·라디오 제어를 보완하고, 실제 오픈소스 클라이언트가 가상 WLED 장치와 통신하는 02/08 확장을 제공합니다. 04–07의 실물 연결이나 09/10은 이 변경에 포함되지 않습니다. 모델 API·BLE·카메라 권한 없이 확장 데모를 실행할 수 있습니다.
+기존 LED·라디오 제어를 보완하고, 02/08 조명·관찰 데모와 04–07의 작은 실행 경로를 제공합니다. 모델 API·BLE·카메라 권한 없이 확장 데모를 실행할 수 있습니다. 확장 장치의 실물 연결, 09/10 및 새로 추가된 11번은 이 변경에 포함되지 않습니다.
 
 ## 확장 데모 실행
 
@@ -27,6 +27,45 @@ Windows에서는 `py -3.11 -m venv .venv` 후 `.venv\Scripts\python.exe`로 같�
 ```
 
 시뮬레이터는 WLED 펌웨어를 실행하지 않습니다. 공식 JSON API의 필요한 부분을 구현한 테스트 상대입니다. payload 구성·기기 모델 파싱은 실제 upstream 라이브러리가 담당합니다. 상태가 맞는다는 결과와 물리 검증을 분리해 항상 `physically_verified=false`를 반환합니다.
+
+## 추가된 04–07 실행 경로
+
+화면 아래의 카드에서 다음 순서로 실행합니다. 각 장치는 loopback에만 연결하며 실패 조건도 장치별로 분리합니다.
+
+| 번호 | 시연 순서 | 이번에 확인하는 범위 | 실물에서 남은 일 |
+|---|---|---|---|
+| 04 | 거실 1번 등 켜기 → 끄기 → 오래된 상태 | HA REST 형식의 요청·재조회, 나머지 조명 상태 보존, 오래된/없는 상태 거절 | 기존 HA bridge와 light entity 매핑, RS485 월패드의 실제 다른 채널 보존 확인 |
+| 05 | 현재 앱 저장 → YouTube 열기 → 저장한 앱 복귀 | 실제 adb-shell 클라이언트·ADB TCP, foreground package 복귀, 전환 무시 실패 | TV ADB 승인·실제 activity 설정·전환 지연 확인. 재생 위치 복원은 별도 기능 |
+| 06 | 정지 코드 학습 → 출발 코드 학습 → 출발·정지 전송 | 실제 python-broadlink 인증·암호화·UDP·학습·재송신, 자동 정지 전송 | 송수신기와 실제 리모컨 학습, 움직임·정지 관찰. 합성 코드는 실물용이 아님 |
+| 07 | 현관 청소 시작 → 일시정지 → 명령 무시 | Valetudo API 형식의 지정 구역 요청·상태 재조회 | 지원 청소기·실제 지도 좌표 교정·청소 결과 확인. 영상으로 오염 구역을 찾지 않음 |
+
+04/07은 Home Assistant·Valetudo 서버 자체를 설치한 결과가 아닙니다. 공개 API의 필요한 부분을 구현한 테스트 상대와 직접 작성한 어댑터를 사용합니다. 05/06은 설치된 upstream 클라이언트가 실제 loopback 소켓에 패킷을 보냅니다. 반대편 장치의 상태·TV 앱·IR 펄스는 가상입니다.
+
+IR 전송은 허브 ACK가 와도 `sent_unverified`입니다. 정지 코드가 없으면 출발하지 않으며 출발 뒤 정지 전송을 시도합니다. 그 응답 역시 실제 모터 정지를 증명하지 않습니다. 전체 중단에서 청소기 일시정지에 실패하면 결과도 실패로 표시합니다. 초기화는 가상 장치, TV 저장 앱, 학습한 IR 코드를 지웁니다.
+
+세부 연결 조건·출처: [04/07 HA·Valetudo](TRACKS_04_07.md), [05 TV](TRACK_05_TV.md), [06 IR](TRACK_06_IR.md).
+
+### MCP에서 같은 4개 트랙 실행
+
+```sh
+.venv/bin/python src/device_demo_mcp.py
+```
+
+MCP 클라이언트에 위 명령을 stdio 서버로 등록합니다. `device_wallpad`, `device_tv`, `device_ir`, `device_vacuum`, `stop_all`만 노출합니다. 카메라나 실물 환경 변수를 사용하지 않습니다. 예시 인수:
+
+```json
+{"name":"device_wallpad","arguments":{"channel":"living_1","on":true}}
+{"name":"device_tv","arguments":{"action":"snapshot"}}
+{"name":"device_tv","arguments":{"action":"launch","app":"youtube"}}
+{"name":"device_tv","arguments":{"action":"restore"}}
+{"name":"device_ir","arguments":{"op":"learn","name":"stop"}}
+{"name":"device_ir","arguments":{"op":"learn","name":"forward"}}
+{"name":"device_ir","arguments":{"op":"send","name":"forward","hold_seconds":0.3}}
+{"name":"device_vacuum","arguments":{"action":"clean_zone","zone":"entry"}}
+{"name":"device_vacuum","arguments":{"action":"pause"}}
+```
+
+기존 `say` 플래너나 원래 웹 채팅이 새 4개 트랙을 자연어로 자동 선택하는 기능은 아직 연결하지 않았습니다. 현재 경로는 데모 버튼과 명시적 MCP 도구 호출입니다.
 
 ## 90초 시연 순서
 
@@ -83,6 +122,10 @@ WLED 실물이 준비되면 `requirements-demo.txt`도 설치하고, 신뢰한 �
 |---|---|---|
 | WLED 클라이언트 | [frenck/python-wled](https://github.com/frenck/python-wled), PyPI `wled==1.1.1`, MIT | 의존성으로 설치. `update → segment → update`, payload·모델 파싱 재사용. 코드 vendoring 없음 |
 | 프로토콜 | [WLED JSON API](https://kno.wled.ge/interfaces/json-api/) | `/json`, `/json/state`, `/json/si`와 catalog 응답의 필요한 부분을 자체 시뮬레이터로 구현. 전체 펌웨어 호환 주장 없음 |
+| TV | [adb-shell](https://github.com/JeffLIrion/adb_shell), `0.4.4`, Apache-2.0 | 실제 ADB 클라이언트·TCP transport 사용. foreground 앱만 비교 |
+| IR | [python-broadlink](https://github.com/mjg59/python-broadlink), `0.19.0`, MIT | 실제 RM mini 인증·AES·UDP·IR codec. 가상 펄스는 직접 생성 |
+| 월패드 API | [Home Assistant REST API](https://developers.home-assistant.io/docs/api/rest/) | API 규격 참조. 기존 HA bridge가 제공하는 light entity만 제어. HA/hacollector 코드는 복사하지 않음 |
+| 청소기 API | [Valetudo](https://github.com/Hypfer/Valetudo), Apache-2.0 | 공개 capability/state API 규격 참조. 서버·펌웨어 설치 또는 소스 복사 없음 |
 | 영수증 | 기존 KEVIN `receipt.py`; [Pillow](https://github.com/python-pillow/Pillow), [cryptography](https://github.com/pyca/cryptography) | 기존 영상 비교·Ed25519를 사용하고 출처·ROI·누락 파일 검증 보완 |
 | 실물 제어 | 기존 KEVIN `show_transport.py`; [pypixelcolor](https://github.com/lucagoc/pypixelcolor) `0.5.0` | 기존 BLE 경로 유지. Windows MediaPlayer에 재생 없는 음량 변경 추가 |
 
@@ -98,4 +141,4 @@ node --check docs/demo/demo.js
 git diff --check
 ```
 
-WLED와 데모 테스트는 실제 loopback HTTP를 사용합니다. 장치 응답 무시·다른 구역 변경·시간 초과·취소와 재사용, 오래된 관찰, 영상 판정 실패, 영수증 누락·변조를 확인합니다. 실제 모델 API·현장 BLE·Windows 오디오·웹캠의 검증을 대체하지 않습니다.
+WLED·월패드·청소기는 실제 loopback HTTP, TV는 ADB TCP, IR은 Broadlink UDP를 사용합니다. 장치 응답 무시·다른 구역 변경·시간 초과·취소와 재사용, 오래된 관찰, 영상 판정 실패, 영수증 누락·변조를 확인합니다. 추가로 `device_demo_mcp.py`를 별도 프로세스로 실행해 initialize/tools/list와 4개 트랙의 실제 stdio 호출을 검사합니다. 실제 모델 API·현장 BLE·Windows 오디오·웹캠·TV·IR·청소기 검증을 대체하지 않습니다.

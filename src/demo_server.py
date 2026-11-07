@@ -69,6 +69,9 @@ class DemoApp:
         self.last_result = None
         self.history = []
         self._closed = False
+        self.devices = None
+        self.adapter_timeout = adapter_timeout
+        self._stopping = 0
 
     def close(self):
         with self._guard:
@@ -77,6 +80,8 @@ class DemoApp:
             self._closed = True
             self.cancel.set()
         self.adapter.stop()
+        if self.devices is not None:
+            self.devices.close()
         self.simulator.shutdown()
         self.simulator.server_close()
         self._sim_thread.join(timeout=2)
@@ -85,7 +90,8 @@ class DemoApp:
         with self._guard:
             values = {'last_result': copy.deepcopy(self.last_result),
                       'history': copy.deepcopy(self.history)}
-        return dict(values, device=self.simulator.device.snapshot(), source='simulation',
+        return dict(values, device=self.simulator.device.snapshot(),
+                    tracks=self.devices.snapshot() if self.devices is not None else {}, source='simulation',
                     physically_verified=False, busy=self._operation.locked())
 
     @staticmethod
@@ -120,7 +126,9 @@ class DemoApp:
         action = body['action']
         allowed = {'light': {'action', 'segment', 'on', 'brightness', 'color'},
                    'observe': {'action', 'scenario'}, 'fault': {'action', 'fault'},
-                   'reset': {'action'}, 'stop': {'action'}}
+                   'reset': {'action'}, 'stop': {'action'},
+                   'device': {'action', 'device', 'plan'},
+                   'device_fault': {'action', 'device', 'fault'}}
         if action not in allowed or set(body) - allowed[action]:
             raise ValueError('지원하지 않는 동작 또는 인수입니다.')
         if action == 'light':
@@ -140,19 +148,41 @@ class DemoApp:
             raise ValueError('지원하지 않는 관찰 시나리오입니다.')
         elif action == 'fault' and body.get('fault') not in ('none', 'ignore', 'timeout'):
             raise ValueError('지원하지 않는 가상 오류입니다.')
+        elif action in ('device', 'device_fault'):
+            from demo_devices import FAULTS
+            if not isinstance(body.get('device'), str) or body['device'] not in FAULTS:
+                raise ValueError('지원하지 않는 장치입니다.')
+            if action == 'device' and not isinstance(body.get('plan'), dict):
+                raise ValueError('장치 명령이 필요합니다.')
+            if action == 'device_fault' and body.get('fault') not in FAULTS[body['device']]:
+                raise ValueError('지원하지 않는 가상 오류입니다.')
 
     def action(self, body):
         self.validate(body)
         if body['action'] == 'stop':
             with self._guard:
+                self._stopping += 1
                 self.cancel.set()
                 self.adapter.stop()
-                return self._remember_locked(self._result('stopped', '대기 중인 제어를 취소했어요. 조명 상태는 그대로 둡니다.'))
+                devices = self.devices
+            try:
+                stopped = devices.stop() if devices is not None else {}
+                failed = any(r['status'] == 'failed' for r in stopped.values())
+                with self._guard:
+                    return self._remember_locked(self._result('failed' if failed else 'stopped',
+                        '요청은 취소했지만 일부 장치의 정지 응답을 확인하지 못했어요.' if failed else
+                        '대기 중인 제어를 취소했어요. 조명 상태는 그대로 둡니다.',
+                        result=stopped, device_results=stopped))
+            finally:
+                with self._guard:
+                    self._stopping -= 1
         # Register the active operation and its cancellation token together.
         # stop() must not see an acquired operation with the previous token.
         with self._guard:
             if self._closed:
                 return self._result('failed', '데모 서버가 종료됐어요.')
+            if self._stopping:
+                return self._result('busy', '장치의 정지 응답을 확인 중이에요.')
             if not self._operation.acquire(blocking=False):
                 return self._result('busy', '이전 요청을 처리하고 있어요. 정지하거나 잠시 기다려 주세요.')
             self.cancel = threading.Event()
@@ -163,11 +193,29 @@ class DemoApp:
                 result = self._result('ready', '가상 장치의 응답 조건을 바꿨어요.')
             elif body['action'] == 'reset':
                 self.simulator.device.reset()
+                if self.devices is not None:
+                    self.devices.reset()
                 with self._guard:
                     self.history.clear()
                 result = self._result('ready', '가상 장치를 처음 상태로 되돌렸어요.')
             elif body['action'] == 'light':
                 result = self._light(body, cancel)
+            elif body['action'] in ('device', 'device_fault'):
+                if self.devices is None:
+                    from demo_devices import DemoDevices
+                    self.devices = DemoDevices(timeout=self.adapter_timeout)
+                if body['action'] == 'device_fault':
+                    self.devices.set_fault(body['device'], body['fault'])
+                    result = self._result('ready', '가상 장치의 응답 조건을 바꿨어요.', device=body['device'])
+                else:
+                    reply = asdict(self.devices.apply(body['device'], body['plan'], cancel))
+                    status = reply['status']
+                    message = {'acknowledged': '장치 응답을 확인했어요. 실물 동작은 별도 확인이 필요합니다.',
+                               'sent_unverified': '전송했어요. 실제 동작은 아직 확인하지 못했어요.',
+                               'failed': '요청한 결과를 확인하지 못했어요.',
+                               'stopped': '요청을 취소했어요. 정지 응답을 확인해 주세요.'}.get(status, '장치 결과를 확인해 주세요.')
+                    result = self._result(status, message, device=body['device'],
+                                          action_status=status, result=reply)
             else:
                 result = self._observe(body, cancel)
             with self._guard:

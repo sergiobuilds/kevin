@@ -110,7 +110,7 @@ def _plan(args, music='keep', volume=None):
 
 class Kevin:
     def __init__(self, controller=None, camera=None, signer=None, receipts_dir=None, settle=1.5,
-                 light=None):
+                 light=None, devices=None, devices_only=False):
         if controller is None:
             from show_control import ShowController
             controller = ShowController()
@@ -130,10 +130,16 @@ class Kevin:
         self.dispatch_lock = threading.Lock()
         self.stop_requested = threading.Event()
         self.light = light
+        self.devices = dict(devices or {})
+        self.devices_only = devices_only
 
     @property
     def tools(self):
-        return TOOLS + ([LIGHT_TOOL] if self.light is not None else [])
+        base = [t for t in TOOLS if t['name'] == 'stop_all'] if self.devices_only else TOOLS
+        extra = [{'name': 'device_' + name, 'description': adapter.capabilities[0].description,
+                  'inputSchema': adapter.capabilities[0].schema}
+                 for name, adapter in self.devices.items()]
+        return base + ([LIGHT_TOOL] if self.light is not None else []) + extra
 
     def begin_operation(self):
         with self.dispatch_lock:
@@ -253,12 +259,30 @@ class Kevin:
                 result = self.controller.stop()
                 if self.light is not None:
                     result['light'] = self.light.stop().status
+            # Adapters may need network I/O to pause; never block dispatch on it.
+            for device, adapter in self.devices.items():
+                from dataclasses import asdict
+                try:
+                    result[device] = asdict(adapter.stop())
+                except Exception:
+                    result[device] = {'status': 'failed', 'physically_verified': False,
+                                      'detail': {'error': 'stop_failed'}}
+                if result[device]['status'] == 'failed':
+                    result['status'] = 'failed'
             return result
         if name == 'light_segment':
             from dataclasses import asdict
             with self.lock:
                 cancel = cancel if cancel is not None else self.begin_operation()
                 return asdict(self.light.apply(args, cancel))
+        if name.startswith('device_') and name[7:] in self.devices:
+            from dataclasses import asdict
+            with self.lock:
+                cancel = cancel if cancel is not None else self.begin_operation()
+                result = asdict(self.devices[name[7:]].apply(args, cancel))
+                if cancel.is_set():
+                    result.update(action_status=result['status'], status='stopped', physically_verified=False)
+                return result
         raise KeyError(name)
 
 
