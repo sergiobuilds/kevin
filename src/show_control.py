@@ -246,7 +246,7 @@ class ShowController:
             self._update(cancel, status='complete', message=plan['explanation'] or '됐어!')
         except Cancelled:
             return
-        except Exception:
+        except Exception as error:
             # Never leak model URLs/tokens, BLE identifiers or platform exceptions.
             if stage == 'audio' and not cancel.is_set():
                 try:
@@ -259,6 +259,11 @@ class ShowController:
                 'sending': '전광판이 대답을 안 해. 전원이랑 블루투스 좀 봐줄래?',
                 'audio': '전광판은 바꿨는데 라디오가 안 잡혀. 소리 출력에 라디오 연결됐는지 봐줘.',
             }
+            if stage == 'planning' and self.config.get('KEVIN_PLANNER') == 'openai':
+                from openai_planner import OpenAIPlanError
+                if isinstance(error, OpenAIPlanError):
+                    # Only this planner's explicitly redacted public messages.
+                    messages['planning'] = str(error)
             try:
                 fields = dict(status='error', message=messages[stage])
                 if stage == 'sending':

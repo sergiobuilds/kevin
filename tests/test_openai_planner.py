@@ -140,6 +140,29 @@ class LunaTests(unittest.TestCase):
         finally:
             backend.close()
 
+    def test_controller_displays_actionable_redacted_cloud_errors(self):
+        from test_show_control import FakeRadio, FakeTransport, finished, small_scene
+        for error, expected in [
+            (None, "OPENAI_API_KEY"),
+            (luna.OpenAIPlanError("OpenAI 요청 실패 (HTTP 429). API 키·권한·할당량을 확인하세요."), "429"),
+            (RuntimeError("private-token-in-platform-error"), "AI 연결"),
+        ]:
+            c = show_control.ShowController(config={"KEVIN_PLANNER": "openai"},
+                radio=FakeRadio(), transport=FakeTransport(), renderer=small_scene)
+            try:
+                if error is None:
+                    c.command("눈 많이", False)
+                    state = finished(c)
+                else:
+                    with patch("openai_planner.interpret", side_effect=error):
+                        c.command("눈 많이", False)
+                        state = finished(c)
+                self.assertEqual(state["status"], "error")
+                self.assertIn(expected, state["message"])
+                self.assertNotIn("private-token", str(state))
+            finally:
+                c.close()
+
     def test_stop_ignores_late_cloud_plan_without_device_calls(self):
         from test_show_control import FakeRadio, FakeTransport, finished, small_scene
         entered, release = threading.Event(), threading.Event()
@@ -207,6 +230,38 @@ class LunaTests(unittest.TestCase):
                 self.assertEqual(luna.interpret("눈", {}, CONFIG), PLAN)
             self.assertEqual(calls[0][0], "Bearer qa-placeholder")
             self.assertIsNone(luna._NoRedirect().redirect_request(None, None, 302, "", {}, "https://other.invalid"))
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_actual_http_redirect_is_not_followed_with_authorization(self):
+        paths = []
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                paths.append(self.path)
+                self.send_response(302)
+                self.send_header("Location", "/credential-sink")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            def do_GET(self):
+                paths.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            def log_message(self, *args): pass
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        real = urllib.request.build_opener(luna._NoRedirect)
+        opener = Mock()
+        opener.open.side_effect = lambda request, **kwargs: real.open(urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/v1/responses", request.data, dict(request.headers)), **kwargs)
+        try:
+            with patch("urllib.request.build_opener", return_value=opener):
+                with self.assertRaises(luna.OpenAIPlanError) as caught:
+                    luna.interpret("눈", {}, CONFIG)
+            self.assertIn("302", str(caught.exception))
+            self.assertEqual(paths, ["/v1/responses"])
         finally:
             server.shutdown()
             server.server_close()
