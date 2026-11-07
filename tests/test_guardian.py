@@ -104,6 +104,29 @@ class GuardianTests(unittest.TestCase):
         self.assertEqual(g.step(no_model)['action'], 'none')
         self.assertEqual(self.ctrl.stops, 1)
 
+    def test_idle_stop_never_claims_success_before_confirmation(self):
+        for status in ('error', 'stopping', 'failed', 'unknown', None, 'stopped', 'exception'):
+            with self.subTest(status=status):
+                g = self.make([jpg()], 'home', idle=60)
+                self.clock.t += 61
+                def stop():
+                    self.assertEqual(self.voice.said, [])
+                    if status == 'exception':
+                        raise RuntimeError('device unavailable')
+                    return {} if status is None else {'status': status}
+                self.ctrl.stop = stop
+                event = g.step(no_model)
+                if status == 'stopped':
+                    self.assertIs(g.devices_on, False)
+                    self.assertEqual(event['action'], 'power_save')
+                    self.assertIn('껐어', self.voice.said[-1])
+                else:
+                    self.assertIsNone(g.devices_on)
+                    self.assertEqual(event['action'], 'none')
+                    self.assertNotIn('껐어', self.voice.said[-1])
+                    self.assertIn('확인', self.voice.said[-1])
+                self.assertIn('stop', event)
+
     def test_model_cannot_raise_a_false_alarm(self):
         g = self.make([jpg()], 'home')
         event = g.step(lambda obs: guardian.reason(obs, url='http://127.0.0.1:9', timeout=.2))

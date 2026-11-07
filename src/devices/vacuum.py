@@ -47,6 +47,7 @@ class ValetudoVacuumAdapter(_HTTPAdapter):
             if type(zone.get('iterations', 1)) is not int or not 1 <= zone.get('iterations', 1) <= 3:
                 raise ValueError('iterations must be between 1 and 3')
         self.zones = copy.deepcopy(zones)
+        self._unresolved_clean = False
 
     def _detail(self, **values):
         return super()._detail(cleanliness_verified=False, **values)
@@ -101,7 +102,14 @@ class ValetudoVacuumAdapter(_HTTPAdapter):
                 payload = {'action': 'pause'}
                 path = API + '/capabilities/BasicControlCapability'
             self._check(context)
-            self._request(context, path, method='PUT', body=payload)
+            try:
+                self._request(context, path, method='PUT', body=payload)
+            except Exception:
+                if plan['action'] == 'clean_zone' and context['sent'] and not context.get('write_response_received'):
+                    # A socket timeout is not a remote rollback. The robot may
+                    # accept this clean after a subsequent pause/readback.
+                    self._unresolved_clean = True
+                raise
             after = self._state(context)
             matches = (after['status'] == 'cleaning' and after['flag'] == 'zone') if plan['action'] == 'clean_zone' else after['status'] in ('paused', 'idle', 'docked')
             return Result('acknowledged' if matches else 'failed', detail=self._detail(
@@ -119,6 +127,11 @@ class ValetudoVacuumAdapter(_HTTPAdapter):
         # clean request against pause and accidentally restart after stopping.
         self._cancel_active()
         result = self._apply({'action': 'pause'}, threading.Event(), wait_for_slot=self.timeout + .1)
+        if self._unresolved_clean:
+            result.status = 'failed'
+            result.detail.update(error='prior_clean_outcome_unknown',
+                                 outcome='unconfirmed', readback_matches=False,
+                                 command_may_have_been_sent=True)
         confirmed = result.status == 'acknowledged'
         if result.status == 'acknowledged':
             result.status = 'stopped'

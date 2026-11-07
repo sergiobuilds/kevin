@@ -188,9 +188,19 @@ class Guardian:
             if self.receipts:
                 event['receipt'] = self._receipt(before, event)
         elif action == 'power_save':
-            self.voice.say(why)
-            event['stop'] = self.controller.stop()
-            self.devices_on = False
+            try:
+                event['stop'] = self.controller.stop()
+            except Exception:
+                event['stop'] = {'status': 'error'}
+            status = event['stop'].get('status', 'unknown')
+            if status == 'stopped':
+                self.devices_on = False
+            else:
+                self.devices_on = None
+                event.update(action='none', why=(
+                    '정지 요청을 전달했어. 아직 정지를 확인 중이야.' if status == 'stopping' else
+                    '정지를 확인하지 못했어. 기기를 확인해줘.'))
+            self.voice.say(event['why'])
         self.log.append(event)
         return event
 

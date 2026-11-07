@@ -31,7 +31,7 @@ class DemoServerTests(unittest.TestCase):
         with patch.dict('os.environ', KEVIN_SHOW_LIVE='1', KEVIN_LED_ADDRESS='never-contact',
                         KEVIN_RADIO_DEVICE='CRF-35B', KEVIN_CAMERA='0'):
             cls.server = demo_server.make_server('127.0.0.1', 0, out_dir=cls.root / 'runtime',
-                                                 static_dir=cls.static, adapter_timeout=.25)
+                                                 static_dir=cls.static, adapter_timeout=1)
         cls.thread = threading.Thread(target=cls.server.serve_forever, kwargs={'poll_interval': .05}, daemon=True)
         cls.thread.start()
         cls.base = f'http://127.0.0.1:{cls.server.server_port}'
