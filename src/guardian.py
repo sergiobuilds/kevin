@@ -24,6 +24,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))  # embedded Pythons ignore PYTHONPATH
 import pixels
 
 ROOT = Path(__file__).resolve().parent.parent

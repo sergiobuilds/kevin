@@ -15,6 +15,9 @@ import threading
 import time
 import wave
 
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))  # embedded Pythons ignore PYTHONPATH
 from terminal_art import TerminalArt, image_to_ansi, sanitize_terminal_text
 from voice_out import Voice
 
