@@ -50,13 +50,14 @@ function chip(id, cls, label) { const c = $(id); c.className = 'chip ' + (cls ||
 // ---------- bridge ----------
 async function call(path, body) {
   const r = await fetch(BRIDGE + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  if (!r.ok) throw new Error(`Bridge HTTP ${r.status}`);
   return r.json();
 }
 async function health() {
   try {
     const h = await call('/health');
     state.bridge = true;
-    chip('chip-bridge', 'ok');
+    chip('chip-bridge', 'ok', 'BRIDGE 연결됨');
     chip('chip-ai', h.openai ? 'ok' : 'warn', h.openai ? 'AI·OpenAI' : 'AI·LOCAL');
     chip('chip-led', h.live && h.led ? 'ok' : 'warn');
     chip('chip-radio', h.live && h.radio ? 'ok' : 'warn');
@@ -77,8 +78,15 @@ async function ask(text) {
 }
 async function stopAll() {
   $('alert').hidden = true;
-  try { const r = await call('/stop', {}); say(r.reply); } catch { say('알았어, 다 멈출게.'); }
-  state.devicesOn = false; log('전부 정지');
+  try {
+    const r = await call('/stop', {});
+    if (r.error || r.stopped === false || r.status === 'error') throw new Error('Stop failed');
+    state.devicesOn = r.status === 'stopping' ? null : false; say(r.reply || '정지 요청을 전달했어.'); log('정지 요청 전달됨');
+  } catch {
+    state.devicesOn = null;
+    say('정지 요청을 확인하지 못했어. 기기 상태를 직접 확인해줘.');
+    log('정지 실패 · 기기 상태 확인 필요');
+  }
 }
 
 // ---------- voice ----------
