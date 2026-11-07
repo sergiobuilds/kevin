@@ -1,0 +1,2 @@
+# Optional local ASR runtime; install only in work/voice-runtime/env.
+faster-whisper==1.2.1
