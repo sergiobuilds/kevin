@@ -51,7 +51,10 @@ class Eye:
         self.frame = None
         self.error = None
         self.camera_name = None
-        threading.Thread(target=self._run, daemon=True).start()
+        if os.getenv('KEVIN_CAMERA', '').strip().lower() == 'off':
+            self.error = 'camera disabled'
+        else:
+            threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
         try:
@@ -81,7 +84,9 @@ class Eye:
 
     def _open_best(self, cv2):
         """Laptops often expose an IR face camera first; pick the camera with a visible picture."""
-        wanted = os.getenv('KEVIN_CAMERA', '')
+        wanted = os.getenv('KEVIN_CAMERA', '').strip()
+        if wanted.lower() == 'off':
+            return None
         order = [int(wanted)] if wanted.isdigit() else [0, 1, 2, 3]
         best, best_mean = None, -1.0
         for index in order:

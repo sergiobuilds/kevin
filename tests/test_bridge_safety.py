@@ -107,3 +107,13 @@ class BridgeSafetyTests(unittest.TestCase):
                     'music': {'mode': 'carol', 'volume': 0}}
             bridge._act(turn, bridge.job_cancel)
             bridge.c.radio.play.assert_called_once_with(0, bridge.job_cancel)
+
+
+    def test_camera_off_never_opens_a_camera(self):
+        with patch.dict('os.environ', {'KEVIN_CAMERA': 'off'}), patch.object(kevin_bridge.threading, 'Thread') as thread:
+            eye = kevin_bridge.Eye()
+            camera = Mock()
+            self.assertIsNone(eye._open_best(camera))
+            camera.VideoCapture.assert_not_called()
+            thread.assert_not_called()
+            self.assertEqual(eye.error, 'camera disabled')
