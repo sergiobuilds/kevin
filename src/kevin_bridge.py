@@ -242,11 +242,8 @@ class Bridge:
                         'volume': music['volume'], 'explanation': turn['reply']}
                 if music['mode'] == 'carol':
                     self.c.audio_prepared = False
-                self.c.planner = lambda _t, _r, p=plan: dict(p)
-                try:
-                    self.c.command('agent', live)
-                finally:
-                    self.c.planner = None
+                self.c.planner = self._once(plan)
+                self.c.command('agent', live)
                 self.led_now = 'scene'
             elif live and led['mode'] == 'text' and led['text'].strip():
                 anim = {'scroll_left': 'scroll_left', 'blink': 'blink', 'snowflake': 'snowflake', 'fade': 'fade'}.get(led['animation'], 'static')
@@ -269,16 +266,20 @@ class Bridge:
                 self.c.radio.audio_path.parent.mkdir(parents=True, exist_ok=True)
                 self.c.radio.audio_path.write_bytes(wav)
                 self.c.audio_prepared = True
-                self.c.radio.play(music['volume'] or 60, cancel)
+                self._radio(self.c.radio.play(music['volume'] or 60, cancel))
             elif music['mode'] == 'carol' and led['mode'] != 'scene':
                 self.c.radio.close()
                 self.c.audio_prepared = False
                 self.c._prepare_audio(cancel)
-                self.c.radio.play(music['volume'] or 60, cancel)
+                self._radio(self.c.radio.play(music['volume'] or 60, cancel))
             elif music['mode'] == 'stop' and led['mode'] != 'scene':
-                self.c.radio.stop()
-        except Exception:
-            pass
+                self._radio(self.c.radio.stop())
+        except Exception as exc:
+            self.last_error = f'{type(exc).__name__}: {str(exc)[:120]}'
+
+    def _radio(self, result):
+        with self.c.lock:
+            self.c.state['radio'] = dict(result or {}, audible_verified=False)
 
     def _say_plan(self, text):
         state = self.c.get_state()
@@ -289,12 +290,16 @@ class Bridge:
         if p['mode'] == 'stop':
             self.c.stop()
             return {'reply': p['explanation'], 'plan': p, 'source': source}
-        self.c.planner = lambda _t, _r, p=p: dict(p)
-        try:
-            self.c.command(text, self.c.live_configured)
-        finally:
-            self.c.planner = None
+        self.c.planner = self._once(p)
+        self.c.command(text, self.c.live_configured)
         return {'reply': p['explanation'], 'plan': p, 'source': source}
+
+    def _once(self, plan):
+        """A planner the show job reads exactly once, so the job thread can never miss it."""
+        def planner(_text, _recipe):
+            self.c.planner = None
+            return dict(plan)
+        return planner
 
     def guard(self, body):
         mode = body.get('mode', 'away')
@@ -392,7 +397,9 @@ def make_handler(bridge):
                 return
             if self.path.startswith('/state'):
                 s = bridge.c.get_state()
-                return self._send(200, {k: s.get(k) for k in ('status', 'message', 'recipe', 'transport', 'radio')})
+                out = {k: s.get(k) for k in ('status', 'message', 'recipe', 'transport', 'radio')}
+                out.update(led_now=getattr(bridge, 'led_now', None), last_error=getattr(bridge, 'last_error', None))
+                return self._send(200, out)
             if not self._static():
                 self._send(404, {'error': 'not found'})
 
