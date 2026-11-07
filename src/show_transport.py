@@ -76,6 +76,19 @@ def sized_session(address):
     return SizedSession(address)
 
 
+# The 144x16 iPixel panel acknowledges long GIFs but then shows only the first
+# frame; 2- and 11-frame GIFs animate. Keep the loop length, drop frames.
+MAX_PANEL_FRAMES = 12
+
+
+def fit_panel_animation(scene):
+    count = len(scene['frames'])
+    if count <= MAX_PANEL_FRAMES:
+        return scene
+    step = -(-count // MAX_PANEL_FRAMES)
+    return dict(scene, frames=scene['frames'][::step], duration=scene['duration'] * step)
+
+
 class LedTransport:
     def __init__(self, address, *, session_factory=None):
         self.address = address
@@ -126,7 +139,7 @@ class LedTransport:
             raise TransportError('explicit panel configuration required')
         if type(brightness) is not int or not 0 <= brightness <= 25:
             raise TransportError('show brightness must be 0..25')
-        scene = pixels.validate(scene)
+        scene = fit_panel_animation(pixels.validate(scene))
         if scene['duration'] % 10:
             raise TransportError('exact 10ms frame delays required')
         kind = 'gif' if len(scene['frames']) > 1 else 'png'
