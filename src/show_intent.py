@@ -46,8 +46,9 @@ volume within bounds; e.g. slower means current speed * 0.75, more snow means he
 If a requested operation is unsupported, return mode=unsupported and no changes
 (preset/snow/sky/music=keep, speed/volume=null). Never silently execute a subset.
 For whole-show stop return preset/snow/sky=keep, speed/volume=null, music=stop.
-explanation is a short Korean description of the interpreted plan, not a claim that
-anything has executed or been physically seen, heard, or verified.
+explanation is what KEVIN says back out loud: one or two short, warm Korean sentences
+in casual speech (반말), first person, saying what you are about to do, e.g.
+"좋아, 눈 펑펑 내리게 하고 캐럴도 틀게!". Never claim it already happened or was seen.
 """
 
 
@@ -142,10 +143,50 @@ def ground(prompt, spec, current):
     changed = any(out[k] != v for k, v in keep.items())
     if not changed:
         return dict(out, mode="unsupported", **keep,
-                    explanation="지금 연결된 기기로는 할 수 없는 요청이에요.")
+                    explanation="그건 지금 내가 움직일 수 있는 기기로는 못 해. 전광판이랑 라디오는 바로 바꿀 수 있어!")
     if out["mode"] in ("stop", "unsupported"):
         out["mode"] = "update" if current else "start"
+    out["explanation"] = reply(out, current)
     return out
+
+
+_COLOR_NAMES = {
+    "#d0202a": "빨간색", "#f07818": "주황색", "#e8c020": "노란색", "#1f8a3a": "초록색",
+    "#1d3f9e": "파란색", "#14215c": "남색", "#5b2a9e": "보라색", "#d8508a": "분홍색",
+    "#05060c": "검은색", "#0b1a3a": "밤하늘색",
+}
+
+
+def reply(plan, current=None):
+    """What KEVIN says back, built from the plan that will actually run."""
+    current = current or {}
+    if plan.get("mode") == "stop":
+        return "알았어, 다 멈출게."
+    parts = []  # (connective form, final form)
+    if plan.get("preset") == "santa":
+        parts.append(("산타 날리고", "산타 날릴게"))
+    elif plan.get("preset") == "christmas_train":
+        parts.append(("크리스마스 기차 달리게 하고", "크리스마스 기차 달리게 할게"))
+    snow = {"heavy": "눈 펑펑 내리게", "none": "눈은 그치게", "normal": "눈 내리게"}.get(plan.get("snow"))
+    if snow:
+        parts.append((snow + " 하고", snow + " 할게"))
+    if plan.get("sky") not in (None, "keep"):
+        color = "하늘은 " + _COLOR_NAMES.get(plan["sky"], "그 색") + "으로"
+        parts.append((color + " 바꾸고", color + " 바꿀게"))
+    speed, before = plan.get("speed"), current.get("speed") or 1
+    if speed is not None and speed != before:
+        word = "기차 더 빠르게" if speed > before else "기차 천천히 가게"
+        parts.append((word + " 하고", word + " 할게"))
+    volume, was = plan.get("volume"), current.get("volume")
+    if volume is not None:
+        parts.append(("소리 키우고", "소리 키울게") if was is None or volume >= was else ("소리 줄이고", "소리 줄일게"))
+    if plan.get("music") == "play":
+        parts.append(("캐럴 틀고", "캐럴 틀게"))
+    elif plan.get("music") == "stop":
+        parts.append(("음악은 끄고", "음악은 끌게"))
+    if not parts:
+        return "응, 그대로 둘게."
+    return "좋아, " + " ".join([mid for mid, _ in parts[:-1]] + [parts[-1][1]]) + "!"
 
 
 def interpret(prompt, current_recipe, endpoint=None, model=None):

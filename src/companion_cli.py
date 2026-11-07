@@ -16,6 +16,7 @@ import time
 import wave
 
 from terminal_art import TerminalArt, image_to_ansi, sanitize_terminal_text
+from voice_out import Voice
 
 _keys = deque()
 _decoder = codecs.getincrementaldecoder('utf-8')('replace')
@@ -106,8 +107,10 @@ class Game:
     def __init__(self, backend):
         self.backend = backend
         self.art = TerminalArt()
+        self.voice = Voice()
+        self.spoken = None
         self.mode = 'room'
-        self.message = 'Space: 말 걸기'
+        self.message = '케빈이 방에 있어. Space로 말 걸어줘.'
         self.prompt = ''
         self.live = False
         self.state = {}
@@ -156,7 +159,7 @@ class Game:
         self.live = False
         self.waiting = True
         self.mode = 'planning'
-        self.message = '실물 요청 처리 중. 실제 결과 확인은 별도입니다.' if execute else '미리보기 해석 중. 기기는 조작하지 않습니다.'
+        self.message = '응, 들었어.' if execute else '응, 들었어. (미리보기)'
         self.worker('command', 'command', {'prompt': prompt.strip(), 'execute': execute})
         self.prompt = ''
 
@@ -169,7 +172,7 @@ class Game:
         self.live = False
         self.job = None
         self.mode = 'stopped'
-        self.message = '전체 정지 요청 중.'
+        self.message = '알았어, 다 멈출게.'
         self.worker('stop', 'stop', {})
 
     def record(self):
@@ -187,7 +190,7 @@ class Game:
         cancel = self.capture_cancel = threading.Event()
         self.mode = 'listening'
         self.waiting = True
-        self.message = '6초간 녹음합니다. Esc로 취소·정지.'
+        self.message = '듣고 있어… (6초)'
         def capture():
             try:
                 chunks = []
@@ -235,7 +238,7 @@ class Game:
             elif kind == 'speech':
                 self.waiting = False
                 if not result.get('text', '').strip():
-                    self.mode, self.message = 'talk', '인식된 말이 없습니다. 다시 말해 주세요.'
+                    self.mode, self.message = 'talk', '잘 못 들었어. 한 번만 더 말해줄래?'
                 else:
                     self.submit(result['text'])
             elif kind == 'state':
@@ -270,7 +273,7 @@ class Game:
         elif char == '\x0c' and not self.waiting:
             self.live = not self.live and self.state.get('live_configured') is True
         elif self.mode == 'room' and char == ' ':
-            self.mode, self.message = 'talk', '듣고 있어요. 요청을 입력하거나 Ctrl+V로 녹음해 주세요.'
+            self.mode, self.message = 'talk', '응? 불렀어? 말해줘. (입력하거나 Ctrl+V로 말하기)'
         elif not self.waiting and self.mode != 'room':
             if char in ('\r', '\n'):
                 self.submit(self.prompt)
@@ -279,13 +282,18 @@ class Game:
             elif char.isprintable() and len(self.prompt) < 2000:
                 self.prompt += char
 
+    def speak(self):
+        if self.mode != 'room' and self.message != self.spoken:
+            self.spoken = self.message
+            self.voice.say(self.message)
+
     def frame(self, cols, rows, phase):
         width = max(20, min(cols - 1, 180))
         graphic_rows = max(4, rows - 7)
         art = self.art.compose(self.mode, width, graphic_rows * 2, phase=phase, target=self.target)
         safe = lambda text: sanitize_terminal_text(text, width - 2)
         lines = [safe('KEVIN  /  HOME ALONE, BUT SMART     ' + ('LIVE · 실물 확인 별도' if self.live or self.executing_live else 'PREVIEW · 이번 요청')),
-                 '+' + '-' * (width - 2) + '+', safe(self.message),
+                 '+' + '-' * (width - 2) + '+', safe('KEVIN ▶ ' + self.message),
                  safe('> ' + self.prompt), safe('Space 대화 | Enter 요청 | Esc 정지 | Ctrl+V 음성 | Ctrl+L 실물 선택 | Ctrl+C 종료')]
         return '\x1b[H' + image_to_ansi(art) + '\x1b[0m' + ''.join(
             f'\x1b[{graphic_rows + i + 1};1H\x1b[2K\x1b[97;44m{line}\x1b[0m'
@@ -311,6 +319,7 @@ def main(argv=None):
                 if char:
                     game.key(char)
                 game.update()
+                game.speak()
                 size = shutil.get_terminal_size((120, 40))
                 sys.stdout.write(game.frame(size.columns, size.lines, time.monotonic() - started))
                 sys.stdout.flush()
@@ -320,6 +329,7 @@ def main(argv=None):
     finally:
         game.epoch += 1
         game.capture_cancel.set()
+        game.voice.close()
         backend.close()
 
 

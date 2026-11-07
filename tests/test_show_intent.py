@@ -22,7 +22,7 @@ class IntentTests(unittest.TestCase):
         original = copy.deepcopy(recipe)
         with patch("urllib.request.urlopen", return_value=response()) as call:
             spec = show_intent.interpret("눈만 더 많이 내려 줘", recipe, "http://localhost:11434", "test-model")
-        self.assertEqual(spec, UPDATE)
+        self.assertEqual(spec, {**UPDATE, "explanation": "좋아, 눈 펑펑 내리게 할게!"})
         self.assertEqual(recipe, original)
         request = call.call_args.args[0]
         self.assertEqual(request.full_url, "http://localhost:11434/api/chat")

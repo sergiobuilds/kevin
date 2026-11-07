@@ -93,7 +93,7 @@ class ShowController:
         self.closed = False
         self.audio_prepared = False
         self.applied_scene = None
-        self.state = dict(status='idle', message='명령을 입력하세요.', job_id=None, revision=0,
+        self.state = dict(status='idle', message='말 걸어줘.', job_id=None, revision=0,
                           recipe=copy.deepcopy(DEFAULT_RECIPE),
                           transport={'status': 'not_sent', 'physical_verified': False},
                           radio={'status': 'not_started', 'audible_verified': False})
@@ -136,7 +136,7 @@ class ShowController:
             job_id = uuid.uuid4().hex
             recipe = copy.deepcopy(self.state['recipe'])
             current = copy.deepcopy(scene if scene is not None else self.state.get('scene'))
-            self.state.update(status='queued', job_id=job_id, message='명령 대기 중',
+            self.state.update(status='queued', job_id=job_id, message='응, 들었어.',
                               transcript=prompt.strip())
             self.state.pop('plan', None)
             threading.Thread(target=self._run, args=(job_id, cancel, prompt.strip(),
@@ -180,20 +180,20 @@ class ShowController:
     def _run(self, job_id, cancel, prompt, execute, recipe, scene):
         stage = 'planning'
         try:
-            self._update(cancel, status=stage, message='AI가 명령을 해석하고 있습니다.')
+            self._update(cancel, status=stage, message='음… 어떻게 할지 생각 중.')
             raw = (self.planner(prompt, copy.deepcopy(recipe)) if self.planner else
                    interpret(prompt, copy.deepcopy(recipe), self.config))
             check_cancel(cancel)
             plan = normalized_plan(raw)
             self._update(cancel, plan=plan)
             if plan['mode'] == 'unsupported':
-                self._update(cancel, status='unsupported', message=plan['explanation'] or '지원하지 않는 요청입니다.')
+                self._update(cancel, status='unsupported', message=plan['explanation'] or '그건 지금 내가 움직일 수 있는 기기로는 못 해.')
                 return
             if plan['mode'] == 'stop':
                 if execute:
                     self.stop(expected_cancel=cancel)
                 else:
-                    self._update(cancel, status='preview', message='전체 정지 미리보기: 기기를 조작하지 않았습니다.')
+                    self._update(cancel, status='preview', message='다 멈추면 돼. (미리보기라 기기는 그대로야)')
                 return
             previous = recipe.copy()
             for key in ('preset', 'snow', 'sky', 'music', 'speed', 'volume'):
@@ -201,7 +201,7 @@ class ShowController:
                     recipe[key] = plan[key]
             visual_change = any(previous[k] != recipe[k] for k in ('preset', 'snow', 'sky'))
             stage = 'rendering'
-            self._update(cancel, status=stage, message='장면을 구성하고 있습니다.')
+            self._update(cancel, status=stage, message='장면 그리는 중이야.')
             if scene is None or visual_change:
                 scene = self.renderer(recipe)
             elif recipe['speed'] != previous['speed']:
@@ -211,13 +211,13 @@ class ShowController:
             scene = pixels.validate(scene)
             self._commit_scene(cancel, recipe, scene)
             if not execute:
-                self._update(cancel, status='preview', message='미리보기 완료: 기기를 조작하지 않았습니다.')
+                self._update(cancel, status='preview', message=(plan['explanation'] or '이렇게 하면 돼.') + ' (미리보기)')
                 return
             if self.applied_scene != scene:
                 stage = 'sending'
                 with self.lock:
                     self.applied_scene = None
-                self._update(cancel, status=stage, message='지정 LED에 전송하고 있습니다.',
+                self._update(cancel, status=stage, message='전광판에 보내는 중!',
                              transport={'status': 'sending', 'physical_verified': False})
                 result = self.transport.send(scene, cancel)
                 check_cancel(cancel)
@@ -227,7 +227,7 @@ class ShowController:
                     self._update(cancel, transport=dict(result, physical_verified=False))
                     self.applied_scene = copy.deepcopy(scene)
             stage = 'audio'
-            self._update(cancel, status=stage, message='라디오 재생 상태를 적용하고 있습니다.')
+            self._update(cancel, status=stage, message='라디오 켤게.')
             if recipe['music'] == 'play':
                 self._prepare_audio(cancel)
                 check_cancel(cancel)
@@ -237,7 +237,7 @@ class ShowController:
             elif plan['music'] == 'stop':
                 check_cancel(cancel)
                 self._update(cancel, radio=self.radio.stop())
-            self._update(cancel, status='complete', message='명령 처리 완료. LED ACK와 재생 상태이며 실제 화면·청취 확인은 별도입니다.')
+            self._update(cancel, status='complete', message=plan['explanation'] or '됐어!')
         except Cancelled:
             return
         except Exception:
@@ -248,10 +248,10 @@ class ShowController:
                 except Exception:
                     pass
             messages = {
-                'planning': 'AI 해석 실패: 모델 연결과 설정을 확인하세요. 대체 규칙으로 실행하지 않았습니다.',
-                'rendering': '장면 생성 실패: 명령과 장면 형식을 확인하세요.',
-                'sending': 'LED 전송 실패: 연결·144x16 기종·ACK를 확인하세요. 음악을 시작하지 않았습니다.',
-                'audio': '라디오 처리 실패: Windows 사용자 세션과 지정 오디오 출력을 확인하세요.',
+                'planning': '어, 지금 머리가 잘 안 돌아가. AI 연결을 한번 봐줄래?',
+                'rendering': '그 장면은 못 그리겠어. 다르게 말해줄래?',
+                'sending': '전광판이 대답을 안 해. 전원이랑 블루투스 좀 봐줄래?',
+                'audio': '전광판은 바꿨는데 라디오가 안 잡혀. 소리 출력에 라디오 연결됐는지 봐줘.',
             }
             try:
                 fields = dict(status='error', message=messages[stage])
@@ -300,7 +300,7 @@ class ShowController:
             self.cancel.set()
             if self.state['status'] == 'stopping':
                 return {'status': 'stopping', 'job_id': self.state['job_id']}
-            self.state.update(status='stopping', message='정지 중: 대기 작업을 취소했습니다.')
+            self.state.update(status='stopping', message='멈추는 중…')
             self.state['recipe']['music'] = 'stop'
             self.applied_scene = None
         try:
@@ -316,8 +316,8 @@ class ShowController:
             with self.lock:
                 failed = radio['status'] == 'stop_failed_unknown'
                 self.state.update(status='error' if failed else 'stopped', message=(
-                    '라디오 정지 실패; 실제 상태를 확인하세요.' if failed else
-                    '정지 완료. 지정 패널 실기기 설정이 없어 LED 전송은 생략했습니다.'))
+                    '라디오가 안 멈춰. 직접 꺼줄래?' if failed else
+                    '다 멈췄어.'))
         return {'status': self.get_state()['status'], 'job_id': self.state['job_id']}
 
     def _clear(self):
@@ -328,12 +328,12 @@ class ShowController:
             with self.lock:
                 failed = self.state['radio']['status'] == 'stop_failed_unknown'
                 self.state.update(status='error' if failed else 'stopped', message=(
-                    '지정 LED 지우기 ACK 수신. 라디오 정지 실패; 실제 상태를 확인하세요.' if failed else
-                    '정지 완료. 지정 LED 지우기 ACK 수신; 실물 확인은 별도입니다.'),
+                    '전광판은 껐는데 라디오가 안 멈춰. 직접 꺼줄래?' if failed else
+                    '다 멈췄어. 전광판도 껐어.'),
                                   transport=dict(result, physical_verified=False))
         except Exception:
             with self.lock:
-                self.state.update(status='error', message='음악 정지 요청·작업 취소 완료. 지정 LED 지우기 실패; 실물 상태를 확인하세요.',
+                self.state.update(status='error', message='음악은 멈췄는데 전광판이 안 꺼져. 봐줄래?',
                                   transport={'status': 'clear_failed_unknown', 'physical_verified': False})
 
     def transcribe(self, audio, mime):
