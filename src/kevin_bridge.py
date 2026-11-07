@@ -119,7 +119,7 @@ def tts(text: str) -> bytes | None:
         return None
     if text in _tts_cache:
         return _tts_cache[text]
-    voice = ELEVEN_VOICE or 'uyVNoMrnUku1dZyVEXwD'  # Anna Kim (ko)
+    voice = ELEVEN_VOICE or 'IQt4I2Udet4gAwcFGAlU'  # Oki: playful young Korean male
     body = {'text': text, 'model_id': os.getenv('ELEVENLABS_MODEL_ID', 'eleven_multilingual_v2'),
             'voice_settings': {'stability': 0.45, 'similarity_boost': 0.8, 'style': 0.35, 'use_speaker_boost': True}}
     req = urllib.request.Request(f'https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128',
@@ -350,8 +350,27 @@ def make_handler(bridge):
     return Handler
 
 
+WARM_LINES = ['안녕, 난 케빈이야. 이 집은 내가 맡을게. 말 걸어줘.', '응, 말 걸어줘.', '다녀와. 집은 내가 지킬게.',
+              '아무도 없으면 내가 알아서 끌게.', '알았어, 다 멈출게.', '누구세요? 지금 경찰에 신고했어요!',
+              '한동안 아무도 없어서 전광판이랑 라디오 껐어.']
+
+
+def warm_up():
+    """Open the OpenAI/ElevenLabs connections and cache fixed lines so the first request is fast."""
+    try:
+        plan('하늘 그대로 둬', {})
+    except Exception:
+        pass
+    for line in WARM_LINES:
+        try:
+            tts(line)
+        except Exception:
+            pass
+
+
 def main():
     bridge = Bridge()
+    threading.Thread(target=warm_up, daemon=True).start()
     server = ThreadingHTTPServer(('127.0.0.1', PORT), make_handler(bridge))
     h = bridge.health()
     print(f"KEVIN bridge  http://127.0.0.1:{PORT}  live={h['live']}  openai={h['openai']}", flush=True)
