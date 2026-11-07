@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>KEVIN · OBA.RUN 2nd</title>
+<style>
+@font-face{font-family:'Wanted Sans Variable';src:url(assets/WantedSansVariable.woff2) format('woff2');font-weight:100 900}
+:root{--bg:#141414;--s1:#1f1f1f;--s2:#262626;--ink:#fff;--sec:#e6e6e6;--mut:#a3a3a3;--dim:#737373;--line:#404040;--acc:#9c86ff;--teal:#5fc2c9;--lime:#c9c66a;--rose:#e48ab0;--red:#ff4d5e}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:'Wanted Sans Variable','Noto Sans CJK KR',sans-serif;color:var(--ink)}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:0 0;background:var(--bg);overflow:hidden}
+.slide{position:absolute;inset:0;padding:110px 120px;opacity:0;visibility:hidden;transition:opacity .5s}
+.slide.on{opacity:1;visibility:visible}
+h1{margin:0;font-size:78px;font-weight:500;letter-spacing:-1px}
+.sub{margin-top:18px;font-size:32px;color:var(--mut)}
+.a{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.8,.2,1),transform .8s cubic-bezier(.2,.8,.2,1);transition-delay:calc(var(--d,0)*1s)}
+.on .a{opacity:1;transform:none}
+.chip{display:inline-block;border:2px solid currentColor;border-radius:40px;padding:8px 26px;font-size:28px;font-weight:500}
+.card{background:var(--s1);border:2px solid var(--line);border-radius:24px}
+.ico{display:inline-block;vertical-align:middle}
+.ico svg{width:100%;height:100%;overflow:visible}
+.ico path,.ico line,.ico rect,.ico circle{fill:none;stroke:currentColor;stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round}
+.status{font-size:24px;font-weight:500}
+.s-on{color:var(--teal)}.s-im{color:var(--acc)}.s-pl{color:var(--dim)}
+.mono{font-family:'DejaVu Sans Mono',monospace}
+.foot{position:absolute;left:120px;bottom:60px;font-size:24px;color:var(--dim)}
+/* 1 */
+.cover-l{position:absolute;left:120px;top:190px;width:1000px}
+.big{font-size:150px;font-weight:650;letter-spacing:-4px;line-height:1.05;margin:26px 0 10px}
+.cover-r{position:absolute;right:120px;top:90px;width:620px;height:900px;border-radius:28px;overflow:hidden;background:linear-gradient(#262040,#1f1f1f)}
+.cover-r img{position:absolute;bottom:0;width:100%}
+/* full bleed video */
+.bleed{position:absolute;inset:0;padding:0}
+.bleed video,.bleed img.fill{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,20,20,.0) 45%,rgba(20,20,20,.92) 100%)}
+.cap{position:absolute;left:120px;bottom:100px}
+.cap h1{font-size:96px;font-weight:650}
+.blur{filter:blur(40px) brightness(.35);transform:scale(1.2)}
+.vert{position:absolute;left:240px;top:60px;width:540px;height:960px;border-radius:28px;overflow:hidden;box-shadow:0 30px 80px #000a}
+.vert video,.vert img{width:100%;height:100%;object-fit:cover}
+/* typing */
+.type{overflow:hidden;white-space:nowrap;width:0;border-right:4px solid transparent}
+.on .type{animation:typing var(--t,2s) steps(var(--n,30)) forwards;animation-delay:calc(var(--d,0)*1s)}
+@keyframes typing{from{width:0}to{width:var(--w)}}
+.caret{display:inline-block;width:18px;height:40px;background:var(--red);vertical-align:-6px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.pix{image-rendering:pixelated}
+/* led */
+.led{border-radius:16px;padding:22px;background:#000;box-shadow:0 0 60px rgba(95,194,201,.25),inset 0 0 0 2px #333}
+.flash{animation:flash 1s steps(1) infinite}
+@keyframes flash{50%{filter:brightness(.4)}}
+.dark{filter:grayscale(1) brightness(.18);transition:filter 1.2s;transition-delay:calc(var(--d,0)*1s)}
+/* flow dots */
+.flowline{position:absolute;background:var(--line)}
+.dot{position:absolute;width:16px;height:16px;border-radius:50%;background:var(--acc);box-shadow:0 0 18px var(--acc)}
+.on .dotv{animation:dv 2.4s linear infinite;animation-delay:calc(var(--d,0)*1s)}
+.on .doth{animation:dh 3.2s linear infinite;animation-delay:calc(var(--d,0)*1s)}
+@keyframes dv{from{transform:translateY(0);opacity:1}to{transform:translateY(var(--len));opacity:.2}}
+@keyframes dh{from{transform:translateX(0)}to{transform:translateX(var(--len))}}
+.grow{transform-origin:bottom;transform:scaleY(0);transition:transform 1.2s cubic-bezier(.2,.8,.2,1);transition-delay:calc(var(--d,0)*1s)}
+.on .grow{transform:none}
+.slot{border:3px dashed var(--line);border-radius:22px;position:relative;overflow:hidden}
+.fillin{position:absolute;inset:0;border-radius:20px;background:var(--s2);border:3px solid var(--acc);opacity:0;transform:scale(.9);transition:all .7s;transition-delay:calc(var(--d,0)*1s);display:flex;align-items:center;justify-content:center;flex-direction:column}
+.on .fillin{opacity:1;transform:none}
+.hole{position:relative;height:118px;overflow:hidden}
+.hole:after{content:"";position:absolute;left:10%;right:10%;bottom:0;height:34px;border-radius:50%;background:#0b0b0b;border:3px solid var(--line)}
+.mole{position:absolute;left:28%;width:44%;height:96px;bottom:-90px;border-radius:50% 50% 12px 12px;background:#8a6a4a;border:4px solid #c9a37a;z-index:1}
+.mole:before,.mole:after{content:"";position:absolute;top:30px;width:12px;height:12px;border-radius:50%;background:#111}
+.mole:before{left:28%}.mole:after{right:28%}
+.on .mole{animation:pop 2.4s ease-in-out infinite;animation-delay:calc(var(--d,0)*1s)}
+@keyframes pop{0%,100%{bottom:-90px}30%,55%{bottom:18px}}
+.scan{position:absolute;inset:0;background:repeating-linear-gradient(transparent 0 3px,rgba(255,255,255,.04) 3px 4px);z-index:1;pointer-events:none}
+.bob{animation:bob 2.6s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-10px)}}
+.dosapp{background:#07070b;border:3px double #5a5a68;padding:10px}
+.dosbar{display:flex;gap:12px;align-items:center;font-family:'DejaVu Sans Mono',monospace;font-size:20px;color:#fff;letter-spacing:3px;border:2px solid #5a5a68;padding:4px 10px;margin-bottom:8px}
+.dosbar span{flex:1}.dosbar i{font-style:normal;font-size:14px;letter-spacing:1px;border:1px solid #5a5a68;color:#5a5a68;padding:1px 6px}.dosbar i.ok{color:#2de2e6;border-color:#2de2e6}
+.cur{color:#ff2a3d;animation:blink 1s steps(1) infinite}
+.kv{display:block;image-rendering:pixelated;background:#000}
+.dosdlg{position:relative;margin-top:16px;border:3px double #e8e8f0;background:linear-gradient(#10123a,#07081f);padding:22px 20px 14px;min-height:96px}
+.dosname{position:absolute;top:-16px;left:16px;background:#341a3a;border:2px solid #e8e8f0;padding:0 12px;color:#ffb000;font-size:20px}
+.dosline{font-size:30px;color:#fff;min-height:40px}
+.dosline:after{content:'▼';color:#ffb000;font-size:16px;margin-left:8px;animation:blink 1s steps(1) infinite}
+.ledtext{overflow:hidden;display:flex;align-items:center;box-shadow:0 0 70px rgba(201,198,106,.25),inset 0 0 0 2px #333}
+.ledtext:after{content:"";position:absolute;inset:22px;background:radial-gradient(circle,transparent 45%,#000 52%) 0 0/12px 12px;pointer-events:none}
+.marq{white-space:nowrap;font-size:150px;font-weight:800;color:#ffd75c;text-shadow:0 0 18px #ffb000}
+.on .marq{animation:marq 14s linear infinite}
+@keyframes marq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.ring{stroke-dashoffset:314;transition:stroke-dashoffset 1.6s cubic-bezier(.2,.8,.2,1) .6s}
+.on .ring{stroke-dashoffset:var(--to)}
+.draw{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 2s ease;transition-delay:calc(.8s + var(--d,0)*1s)}
+.on .draw{stroke-dashoffset:0}
+body.print .ring{stroke-dashoffset:var(--to);transition:none}body.print .draw{stroke-dashoffset:0;transition:none}
+/* controls */
+#notes{display:none;position:fixed;left:0;right:0;bottom:0;background:#1f1f1fee;color:#e6e6e6;font-size:22px;padding:18px 28px;z-index:9}
+#num{position:fixed;right:18px;bottom:12px;color:#555;font-size:16px;z-index:9}
+/* print */
+body.print{overflow:visible;height:auto;background:var(--bg)}
+body.print #stage{position:relative;left:0;top:0;transform:none!important;height:auto;overflow:visible;background:none}
+body.print .slide{position:relative;width:1920px;height:1080px;opacity:1;visibility:visible;break-after:page;background:var(--bg);overflow:hidden}
+body.print .a{opacity:1;transform:none;transition:none}
+body.print .type{width:var(--w);animation:none}
+body.print .grow{transform:none;transition:none}
+body.print .fillin{opacity:1;transform:none;transition:none}
+body.print .hole:nth-child(odd) .mole{bottom:18px}
+body.print .dot,body.print #notes,body.print #num{display:none}
+@page{size:1920px 1080px;margin:0}
+</style></head><body>
+<div id="stage">
+
+<!-- 1 자택경비원 -->
+<section class="slide" data-n="쉬운 이야기부터. 자택경비원, 백수의 일자리마저 위험하다. 어려운 이야기로 바꾸면, KEVIN은 physical AI를 위한 VLM 실행 계층입니다.">
+ <div class="cover-l">
+  <div class="a chip" style="color:var(--lime)">쉬운 이야기</div>
+  <div class="a big" style="--d:.2">자택경비원</div>
+  <div class="a" style="--d:.5;font-size:54px;color:var(--sec)">백수의 일자리마저 위험하다</div>
+  <div class="a" style="--d:1.2;margin-top:110px"><span class="chip" style="color:var(--acc)">어려운 이야기</span></div>
+  <div class="a" style="--d:1.5;margin-top:30px;font-size:52px"><b style="color:var(--acc);font-weight:650">KEVIN</b> · physical AI를 위한 VLM 실행 계층</div>
+ </div>
+ <div class="cover-r a" style="--d:.3;background:#13305a"><div class="scan"></div><img class="pix bob" src="assets/kevin_portrait.png" alt="" style="bottom:0"><div style="position:absolute;left:30px;top:26px;font-family:'DejaVu Sans Mono',monospace;font-size:26px;color:#fff;letter-spacing:4px">KEVIN<span style="color:#ff2a3d;animation:blink 1s steps(1) infinite">▌</span></div></div>
+</section>
+
+<!-- 2 나 홀로 집에 -->
+<section class="slide bleed" data-n="1990년 「나 홀로 집에」. 케빈은 인형과 마네킹을 장난감 기차에 태우고 전축을 틀어, 혼자 집 전체를 움직였습니다.">
+ <video src="assets/homealone.mp4" poster="assets/homealone-0.png" muted loop playsinline></video>
+ <div class="shade"></div>
+ <div class="cap">
+  <div class="a" style="font-size:30px;color:var(--mut)">1990 · Home Alone</div>
+  <h1 class="a" style="--d:.2">나 홀로 집에</h1>
+  <div class="a" style="--d:.5;font-size:36px;color:var(--sec);margin-top:14px">인형 · 장난감 기차 · 전축 · 혼자서 집 전체 연출</div>
+ </div>
+</section>
+
+<!-- 3 요즘의 연출 -->
+<section class="slide bleed" data-n="2026년의 연출은 이렇습니다. 앱을 깔고, 손가락으로 정해진 그림을 고릅니다. 기기마다 앱이 하나씩 늘어납니다.">
+ <img class="fill blur" src="assets/merrylume-0.png" alt="">
+ <div class="vert a"><video src="assets/merrylume.mp4" poster="assets/merrylume-0.png" muted loop playsinline></video></div>
+ <div style="position:absolute;left:900px;top:250px">
+  <div class="a" style="--d:.2;font-size:30px;color:var(--mut)">2026 · LED 커튼</div>
+  <h1 class="a" style="--d:.3;font-size:96px;font-weight:650">요즘의 연출</h1>
+  <div class="a" style="--d:.7;margin-top:60px;font-size:40px;line-height:1.9;color:var(--sec)">
+   <div>· 기기마다 앱 설치</div><div>· 손가락 조작</div><div>· 정해진 그림 선택</div></div>
+  <div class="a" style="--d:1.4;margin-top:70px;font-size:44px"><b style="color:var(--acc)">KEVIN</b> · 말 한마디 · 집에 있던 기기</div>
+ </div>
+</section>
+
+<!-- 4 레거시 기기 AX -->
+<section class="slide" data-n="불가능하다고 생각했던 레거시 기기도 누구나 말로 조작하고 연동합니다. 오락실 두더지게임처럼 네트워크도 앱도 없는 기계부터, 앞으로는 굴삭기, 의료기기, 안전장비, 엘리베이터까지. 오락실과 산업 기기는 아직 시험 전인 확장 방향입니다.">
+ <h1 class="a">레거시 기기 AX</h1>
+ <div class="sub a" style="--d:.1">불가능했던 기기 · 누구나 말로 조작 · 연동</div>
+ <div class="a card" style="--d:.3;position:absolute;left:120px;top:290px;width:820px;height:640px;padding:44px;border-color:var(--lime)">
+  <div style="font-size:30px;color:var(--mut)">오락실 AX</div>
+  <div style="font-size:52px;margin-top:6px">두더지게임</div>
+  <div id="moles" style="margin:20px auto 0;width:560px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px 40px"></div>
+  <div style="position:absolute;left:44px;bottom:40px;font-size:30px;color:var(--teal)">“두더지 빨리 올려줘”</div>
+ </div>
+ <div class="a" style="--d:.9;position:absolute;left:965px;top:575px;font-size:50px;color:var(--dim)">→</div>
+ <div style="position:absolute;left:1040px;top:290px;width:760px">
+  <div class="a" style="--d:1;font-size:28px;color:var(--mut);margin-bottom:18px">향후 확장</div>
+  <div id="future" style="display:grid;grid-template-columns:1fr 1fr;gap:24px"></div>
+ </div>
+ <div class="a" style="--d:2.2;position:absolute;left:120px;top:965px"><span class="chip s-pl">오락실 · 산업 기기 · 예정</span></div>
+</section>
+
+<!-- 4 KEVIN -->
+<section class="slide" data-n="KEVIN은 터미널 속에 삽니다. 말을 걸면 다가와서, 무엇을 할지 1인칭으로 대답하고 한국어 음성으로 말합니다. 그리고 그대로 기기를 움직입니다.">
+ <h1 class="a">KEVIN</h1>
+ <div class="sub a" style="--d:.1">방을 서성이다 · 말 걸면 다가와 대답</div>
+ <div class="a dosapp" style="--d:.2;position:absolute;left:120px;top:262px;width:826px">
+  <div class="dosbar"><span>KEVIN<b class="cur">▌</b></span><i class="ok">LED</i><i class="ok">RADIO</i><i class="ok">CAM</i><i>AI</i></div>
+  <canvas class="kv" width="320" height="200" style="width:800px;height:500px"></canvas>
+  <div class="dosdlg"><div class="dosname">【KEVIN】</div><div class="dosline" data-say="좋아, 산타 날리고 눈 펑펑 내리게 하고 캐럴 틀게!"></div></div>
+ </div>
+ <div style="position:absolute;left:1090px;top:330px;width:720px;font-size:36px;line-height:1.5">
+  <div class="a" style="--d:.5;color:var(--mut);font-size:26px">사람 · Ctrl+V 음성</div>
+  <div class="a" style="--d:.6;color:var(--teal);margin:8px 0 60px">“크리스마스로 만들어줘.<br>눈 펑펑, 캐럴도.”</div>
+  <div class="a" style="--d:1.6;color:var(--mut);font-size:26px">KEVIN · 소년 목소리</div>
+  <div class="a" style="--d:1.8;color:var(--acc);margin-top:8px">“좋아, 산타 날리고<br>눈 펑펑 내리게 하고<br>캐럴 틀게!” <span class="caret"></span></div>
+ </div>
+ <div class="foot a" style="--d:2.4;left:1090px">계획 · GPT-5.4 · 오프라인 대체 qwen2.5 3B · 소년 목소리 음성</div>
+</section>
+
+<!-- 5 연말 연출 -->
+<section class="slide" data-n="첫 번째, 연말 연출. 말 한마디에 133cm 전광판에 산타와 기차가 달리고 라디오에서 캐럴이 나옵니다. 행사장에서 실제로 동작을 확인했습니다.">
+ <div class="a" style="font-size:30px;color:var(--mut)">할 수 있는 일 · 01</div>
+ <h1 class="a" style="--d:.1">연말 연출</h1>
+ <div class="a led" style="--d:.4;position:absolute;left:120px;top:330px;width:1680px"><img class="pix" src="assets/led-preview.gif" style="width:100%;display:block"></div>
+ <div style="position:absolute;left:120px;top:640px;display:flex;gap:60px;align-items:center;font-size:40px">
+  <div class="a" style="--d:.8;color:var(--teal)">“크리스마스로 만들어줘”</div>
+  <div class="a" style="--d:1;color:var(--dim)">→</div>
+  <div class="a" style="--d:1.2">133cm LED 전광판 · 라디오 캐럴</div>
+ </div>
+ <div class="a" style="--d:1.6;position:absolute;left:120px;top:780px;display:flex;gap:24px">
+  <span class="chip s-on">실물 동작 · 행사장</span><span class="chip" style="color:var(--mut)">해석 약 1초 · 전송 약 6초</span>
+ </div>
+</section>
+
+<!-- 6 집 비움 -->
+<section class="slide" data-n="두 번째, 집 비움. 웹캠으로 1초마다 보고, 사람이 잡히면 「나 홀로 집에」처럼 전광판에 경고를 띄우고 라디오를 최대로 틀고 소리칩니다. 구현을 마쳤고 실물 시험은 남았습니다.">
+ <div class="a" style="font-size:30px;color:var(--mut)">할 수 있는 일 · 02</div>
+ <h1 class="a" style="--d:.1">집 비움</h1>
+ <div class="a led" style="--d:.4;position:absolute;left:120px;top:300px;width:1000px;padding:16px;box-shadow:0 0 80px rgba(255,77,94,.35)"><img class="pix flash" src="assets/intruder-scene.png" style="width:100%;display:block"></div>
+ <div style="position:absolute;left:1200px;top:320px;width:620px;font-size:34px;line-height:1.8">
+  <div class="a" style="--d:.8"><span class="ico" style="width:44px;height:44px;color:var(--teal)" data-i="camera"></span> 웹캠 · 1초마다 관찰</div>
+  <div class="a" style="--d:1"><span class="ico" style="width:44px;height:44px;color:var(--rose)" data-i="sign"></span> 전광판 · 누구야?! · 경찰 신고</div>
+  <div class="a" style="--d:1.2"><span class="ico" style="width:44px;height:44px;color:var(--lime)" data-i="radio"></span> 라디오 · 최대 음량</div>
+ </div>
+ <div class="a" style="--d:1.6;position:absolute;left:120px;top:830px;font-size:52px;color:var(--rose);font-weight:600">“누구세요? 지금 경찰에 신고했어요!”</div>
+ <div class="a" style="--d:2;position:absolute;right:120px;top:120px"><span class="chip s-im">구현 · 실물 시험 전</span></div>
+</section>
+
+<!-- 7 빈방 절전 -->
+<section class="slide" data-n="세 번째, 빈방 절전. 집에 있을 때 한동안 아무도 없으면 케빈이 스스로 판단해 기기를 끄고 알려 줍니다.">
+ <div class="a" style="font-size:30px;color:var(--mut)">할 수 있는 일 · 03</div>
+ <h1 class="a" style="--d:.1">빈방 절전</h1>
+ <div class="a card" style="--d:.3;position:absolute;left:120px;top:300px;width:760px;height:420px;padding:40px">
+  <div style="font-size:30px;color:var(--teal)">켜짐 · 아무도 없음</div>
+  <div class="led" style="margin-top:40px;padding:12px"><img class="pix" src="assets/led-preview.gif" style="width:100%;display:block"></div>
+  <div style="margin-top:40px;font-size:30px;color:var(--sec)"><span class="ico" style="width:40px;height:40px;color:var(--lime)" data-i="radio"></span> 라디오 재생 중</div>
+ </div>
+ <div class="a" style="--d:.9;position:absolute;left:930px;top:470px;text-align:center;width:120px"><span class="ico" style="width:80px;height:80px;color:var(--acc)" data-i="clock"></span><div style="font-size:24px;color:var(--mut);margin-top:10px">대기 시간</div></div>
+ <div class="a card" style="--d:1.4;position:absolute;left:1100px;top:300px;width:700px;height:420px;padding:40px">
+  <div style="font-size:30px;color:var(--mut)">꺼짐 · 스스로 판단</div>
+  <div class="led" style="margin-top:40px;padding:12px"><img class="pix dark" src="assets/led-preview.gif" style="width:100%;display:block"></div>
+  <div style="margin-top:40px;font-size:30px;color:var(--dim)"><span class="ico" style="width:40px;height:40px" data-i="radio"></span> 라디오 정지</div>
+ </div>
+ <div class="a" style="--d:2;position:absolute;left:120px;top:800px;font-size:48px;color:var(--teal);font-weight:600">“한동안 아무도 없어서 전광판이랑 라디오 껐어.”</div>
+ <div class="a" style="--d:2.2;position:absolute;right:120px;top:120px"><span class="chip s-im">구현 · 실물 시험 전</span></div>
+</section>
+
+<!-- 할 수 있는 일 04 -->
+<section class="slide" data-n="네 번째, 놀이와 기억. 케빈과 가위바위보를 하면 판정은 규칙이 하고 결과와 점수가 전광판에 뜹니다. 생일 문구, 직접 지은 노래, 대화 기억도 됩니다. 구현을 마쳤고 실물 시험은 남았습니다.">
+ <div class="a" style="font-size:30px;color:var(--mut)">할 수 있는 일 · 04</div>
+ <h1 class="a" style="--d:.1">놀이 · 작곡 · 기억</h1>
+ <div class="a led ledtext" style="--d:.4;position:absolute;left:120px;top:300px;width:1680px;height:230px"><div class="marq">✊ vs ✌️ 내가 이겼다! &nbsp; KEVIN 2 : 1 YOU &nbsp; 🎂 생일 축하해 지민아 🎉 &nbsp; ✊ vs ✌️ 내가 이겼다! &nbsp; KEVIN 2 : 1 YOU &nbsp; 🎂 생일 축하해 지민아 🎉</div></div>
+ <div id="fun" style="position:absolute;left:120px;top:590px;width:1680px;display:grid;grid-template-columns:repeat(4,1fr);gap:28px"></div>
+ <div class="a" style="--d:2;position:absolute;right:120px;top:120px"><span class="chip s-im">구현 · 실물 시험 전</span></div>
+</section>
+
+<!-- 8 실행 계층 -->
+<section class="slide" data-n="이 모든 일 아래에 실행 계층이 있습니다. 위에서 사람이든 VOOY든 에이닷이든 MCP로 부르면, KEVIN이 도구로 바꾸고 실행하고 카메라로 측정하고 서명합니다. 아래로는 각 기기의 원래 통신법으로 닿습니다.">
+ <h1 class="a">실행 계층</h1>
+ <div class="sub a" style="--d:.1">에이전트 → KEVIN → 기기 원래 통신법</div>
+ <div id="agents" style="position:absolute;left:260px;top:290px;width:1400px;display:flex;justify-content:space-between">
+  <div class="a chip" style="--d:.2;color:var(--sec);width:300px;text-align:center">사람 · 터미널 케빈</div>
+  <div class="a chip" style="--d:.3;color:var(--sec);width:300px;text-align:center">VOOY</div>
+  <div class="a chip" style="--d:.4;color:var(--sec);width:300px;text-align:center">에이닷 · 모두의 AI</div>
+  <div class="a chip" style="--d:.5;color:var(--sec);width:300px;text-align:center">Claude · ChatGPT</div>
+ </div>
+ <div class="a" style="--d:.6;position:absolute;left:985px;top:385px;font-size:26px;color:var(--mut)">MCP</div>
+ <div class="flowline a" style="--d:.6;left:958px;top:360px;width:4px;height:90px"></div>
+ <div class="dot dotv" style="left:952px;top:360px;--len:80px;--d:1"></div>
+ <div class="a card" style="--d:.8;position:absolute;left:260px;top:455px;width:1400px;height:250px;border:3px solid var(--acc);background:var(--s2)">
+  <div style="position:absolute;left:40px;top:28px;font-size:40px;color:var(--acc);font-weight:650">KEVIN</div>
+  <div class="flowline" style="left:120px;top:133px;width:1160px;height:3px"></div>
+  <div class="dot doth" style="left:112px;top:125px;--len:1160px;--d:1.4"></div>
+ </div>
+ <div style="position:absolute;left:260px;top:560px;width:1400px;display:flex;justify-content:space-around">
+  <div class="a" style="--d:1;text-align:center;width:260px"><div style="background:var(--s2);display:inline-block;padding:0 14px"><span class="ico" style="width:56px;height:56px;color:var(--acc)" data-i="code"></span></div><div style="font-size:32px;margin-top:6px">MCP 도구</div><div style="font-size:22px;color:var(--mut)">허용된 동작만</div></div>
+  <div class="a" style="--d:1.15;text-align:center;width:260px"><div style="background:var(--s2);display:inline-block;padding:0 14px"><span class="ico" style="width:56px;height:56px;color:var(--teal)" data-i="rocket"></span></div><div style="font-size:32px;margin-top:6px">실행</div><div style="font-size:22px;color:var(--mut)">GPT-5.4 · 오프라인 3B 계획</div></div>
+  <div class="a" style="--d:1.3;text-align:center;width:260px"><div style="background:var(--s2);display:inline-block;padding:0 14px"><span class="ico" style="width:56px;height:56px;color:var(--lime)" data-i="camera"></span></div><div style="font-size:32px;margin-top:6px">측정</div><div style="font-size:22px;color:var(--mut)">카메라 · 마이크</div></div>
+  <div class="a" style="--d:1.45;text-align:center;width:260px"><div style="background:var(--s2);display:inline-block;padding:0 14px"><span class="ico" style="width:56px;height:56px;color:var(--rose)" data-i="award"></span></div><div style="font-size:32px;margin-top:6px">서명</div><div style="font-size:22px;color:var(--mut)">Ed25519 실물 실행 증명</div></div>
+ </div>
+ <div class="flowline a" style="--d:1.6;left:958px;top:710px;width:4px;height:90px"></div>
+ <div class="dot dotv" style="left:952px;top:710px;--len:80px;--d:2"></div>
+ <div class="a" style="--d:1.6;position:absolute;left:1000px;top:735px;font-size:26px;color:var(--mut)">BLE · 적외선 · Wi-Fi · ADB · RS485</div>
+ <div style="position:absolute;left:260px;top:815px;width:1400px;display:flex;justify-content:space-between" id="devrow"></div>
+</section>
+
+<!-- 9 실물 실행 증명 -->
+<section class="slide" data-n="API가 없는 기기를 MCP 도구로 바꾸고, 실행 결과를 카메라·마이크 등으로 측정해 서명된 실물 실행 증명을 남깁니다. 행사장에서 전광판은 받았다고 응답했지만 화면은 멈춰 있었습니다. 기기의 대답 대신 눈으로 본 결과를 남기는 이유입니다.">
+ <h1 class="a">실물 실행 증명</h1>
+ <div class="sub a" style="--d:.1">API 없는 기기 → MCP 도구 · 카메라·마이크 측정 · 서명된 증명</div>
+ <div class="a" style="--d:.3;position:absolute;left:120px;top:320px;width:500px">
+  <div style="font-size:28px;color:var(--mut);margin-bottom:16px">실행 전</div>
+  <div class="led" style="padding:10px"><img class="pix" src="assets/led-still.png" style="width:100%;display:block;filter:brightness(.45)"></div></div>
+ <div class="a" style="--d:.7;position:absolute;left:640px;top:390px;font-size:50px;color:var(--dim)">→</div>
+ <div class="a" style="--d:.9;position:absolute;left:720px;top:320px;width:500px">
+  <div style="font-size:28px;color:var(--mut);margin-bottom:16px">실행 후 · 2장</div>
+  <div class="led" style="padding:10px"><img class="pix" src="assets/led-preview.gif" style="width:100%;display:block"></div></div>
+ <div class="a" style="--d:1.3;position:absolute;left:1240px;top:390px;font-size:50px;color:var(--dim)">→</div>
+ <div class="a card mono" style="--d:1.6;position:absolute;left:1320px;top:300px;width:480px;padding:34px;font-size:23px;line-height:1.8;border-color:var(--rose)">
+  <div style="color:var(--rose);font-family:'Wanted Sans Variable';font-size:30px;margin-bottom:10px">✓ 서명된 증명</div>
+  plan · led_scene<br>device · ack<br>changed = True (0.0704)<br>moving&nbsp; = True (0.1276)<br>photos · sha256 × 3<br>sig · Ed25519 ✓</div>
+ <div class="a" style="--d:2;position:absolute;left:120px;top:690px;display:flex;gap:20px">
+  <span class="chip s-im">카메라 전후 비교 · 구현</span><span class="chip s-im">서명 · 조작 탐지 · 구현</span><span class="chip s-pl">마이크 측정 · 예정</span></div>
+ <div class="a card" style="--d:2.4;position:absolute;left:120px;top:800px;width:1680px;padding:30px 40px;font-size:30px;color:var(--sec)">
+  행사장 사례 · 전광판 32프레임 “수신 완료” 응답 · 실제 화면 첫 장면 정지 → 기기 응답만으로 확인 불가</div>
+ <div class="foot a" style="--d:2.6">화면은 전송 프레임 재현 · 값은 README 예시</div>
+</section>
+
+<!-- 10 어떤 기기든 -->
+<section class="slide" data-n="KEVIN은 어떤 기기든 AI가 부를 수 있는 도구로 바꿔 줍니다. 앱도, API도 없는 기기까지.">
+ <div class="a" style="position:absolute;left:120px;top:200px;font-size:96px;font-weight:650;letter-spacing:-2px">어떤 기기든<br>AI가 부를 수 있는 도구로</div>
+ <div class="a" style="--d:.5;position:absolute;left:120px;top:470px;font-size:56px;color:var(--acc)">앱도, API도 없는 기기까지</div>
+ <div style="position:absolute;left:120px;top:660px;width:1680px;display:flex;align-items:center;gap:30px" id="anyrow"></div>
+</section>
+
+<!-- 11 옛날 기기 모두 연결 -->
+<section class="slide" data-n="통신 방식별로 연결 경로를 정리했습니다. 실물 동작은 전광판과 라디오, 나머지는 구현·시험·예정으로 나눠 표시했습니다.">
+ <h1 class="a">옛날 기기 모두 연결</h1>
+ <div class="sub a" style="--d:.1">통신 방식 9종 · <span class="s-on">● 동작</span> <span class="s-im">● 구현·시험</span> <span class="s-pl">● 예정</span></div>
+ <div id="wall" style="position:absolute;left:120px;top:290px;width:1680px;display:grid;grid-template-columns:repeat(3,1fr);gap:28px"></div>
+</section>
+
+<!-- 12 대표 유즈케이스 -->
+<section class="slide" data-n="같은 계층으로 이런 일들을 엽니다. 실물로 동작하는 것은 연말 연출이고, 나머지는 구현·시험·예정입니다.">
+ <h1 class="a">대표 유즈케이스</h1>
+ <div id="cases" style="position:absolute;left:120px;top:250px;width:1680px;display:grid;grid-template-columns:repeat(3,1fr);gap:32px"></div>
+</section>
+
+<!-- VC 시장 -->
+<section class="slide" data-n="돈이 어디로 가는지부터 보겠습니다. 2025년 로봇·physical AI 스타트업에 276억 달러, 1,009건이 투자됐고 전년의 두 배가 넘습니다. 돈은 로봇 몸체에서 소프트웨어 층으로 옮겨 가고 있습니다. KEVIN은 이미 집에 있는 기기를 위한 소프트웨어 층입니다.">
+ <h1 class="a">시장 · 돈이 몰리는 곳</h1>
+ <div class="sub a" style="--d:.1">physical AI 투자 · 로봇 몸체 → 소프트웨어 층 이동</div>
+ <div style="position:absolute;left:120px;top:300px;width:900px">
+  <div class="a" style="--d:.3"><div style="font-size:150px;font-weight:650;color:var(--acc);letter-spacing:-4px;line-height:1">276억 달러</div>
+   <div style="font-size:34px;color:var(--sec);margin-top:18px">2025 로봇 · physical AI 스타트업 투자 · 1,009건</div>
+   <div style="font-size:24px;color:var(--dim);margin-top:6px">PitchBook 데이터 · The Robot Report</div></div>
+  <div class="a" style="--d:.7;margin-top:70px;display:flex;gap:70px">
+   <div><div style="font-size:64px;font-weight:650;color:var(--teal)">2배 이상</div><div style="font-size:26px;color:var(--sec)">전년 대비 투자 규모</div></div>
+   <div><div style="font-size:64px;font-weight:650;color:var(--lime)">1,404억 달러</div><div style="font-size:26px;color:var(--sec)">세계 스마트홈 2025 · 2031 3,112억</div><div style="font-size:22px;color:var(--dim)">Mordor Intelligence · 기관별 편차 · 하한값 사용</div></div>
+  </div>
+ </div>
+ <div class="a card" style="--d:1;position:absolute;left:1120px;top:300px;width:680px;height:620px;padding:44px">
+  <div style="font-size:30px;color:var(--mut)">투자 흐름</div>
+  <div style="margin-top:50px;display:flex;flex-direction:column;gap:26px;font-size:36px">
+   <div class="a" style="--d:1.3;display:flex;align-items:center;gap:20px;color:var(--dim)"><span class="ico" style="width:60px;height:60px" data-i="chip"></span>로봇 몸체 · 하드웨어</div>
+   <div class="a" style="--d:1.5;font-size:40px;color:var(--dim);padding-left:16px">↓</div>
+   <div class="a" style="--d:1.7;display:flex;align-items:center;gap:20px;color:var(--sec)"><span class="ico" style="width:60px;height:60px;color:var(--teal)" data-i="brain"></span>범용 로봇 소프트웨어 · embodied AI</div>
+   <div class="a" style="--d:1.9;font-size:40px;color:var(--dim);padding-left:16px">↓</div>
+   <div class="a" style="--d:2.1;display:flex;align-items:center;gap:20px;color:var(--acc);font-weight:650"><span class="ico" style="width:60px;height:60px;color:var(--acc)" data-i="code"></span>KEVIN · 기존 기기 실행 계층</div>
+  </div>
+ </div>
+ <div class="foot a" style="--d:2.3">투자 규모는 집계 기준별 차이 · Crunchbase 기준 2025 약 384억 달러</div>
+</section>
+
+<!-- VC 왜 지금 -->
+<section class="slide" data-n="왜 지금인가. 새로 나오는 스마트홈 기기 중 Matter 표준 지원은 절반 정도이고, 이미 팔린 '스마트' 가전도 오래 연결된 채 남는 건 절반 안팎입니다. 새 기기는 표준으로 가지만, 이미 집에 있는 기기 대부분은 연결 밖에 남습니다. 그 빈칸이 KEVIN의 시장입니다.">
+ <h1 class="a">왜 지금 · 연결 밖의 절반</h1>
+ <div class="sub a" style="--d:.1">신제품은 표준으로 · 이미 집에 있는 기기는 연결 밖</div>
+ <div style="position:absolute;left:120px;top:320px;width:1680px;display:grid;grid-template-columns:repeat(3,1fr);gap:40px">
+  <div class="a card" style="--d:.3;padding:44px;height:520px">
+   <div style="font-size:28px;color:var(--mut)">신규 스마트홈 기기 · Matter 지원</div>
+   <div style="position:relative;width:260px;height:260px;margin:40px auto 0"><svg viewBox="0 0 120 120" style="width:100%;height:100%;transform:rotate(-90deg)"><circle cx="60" cy="60" r="50" fill="none" stroke="#404040" stroke-width="14"/><circle class="ring" cx="60" cy="60" r="50" fill="none" stroke="#9c86ff" stroke-width="14" stroke-dasharray="314" style="--to:166"/></svg><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:650">약 47%</div></div>
+   <div style="font-size:24px;color:var(--dim);margin-top:30px;text-align:center">출시 기준 45~48% · 판매 중 전체 모델 약 31%</div></div>
+  <div class="a card" style="--d:.5;padding:44px;height:520px">
+   <div style="font-size:28px;color:var(--mut)">“스마트” 가전 · 장기 연결 유지</div>
+   <div style="position:relative;width:260px;height:260px;margin:40px auto 0"><svg viewBox="0 0 120 120" style="width:100%;height:100%;transform:rotate(-90deg)"><circle cx="60" cy="60" r="50" fill="none" stroke="#404040" stroke-width="14"/><circle class="ring" cx="60" cy="60" r="50" fill="none" stroke="#5fc2c9" stroke-width="14" stroke-dasharray="314" style="--to:157"/></svg><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:650">약 50%</div></div>
+   <div style="font-size:24px;color:var(--dim);margin-top:30px;text-align:center">LG · Whirlpool 언급 · 전자신문 · ABI Research</div></div>
+  <div class="a card" style="--d:.7;padding:44px;height:520px;border-color:var(--acc)">
+   <div style="font-size:28px;color:var(--mut)">KEVIN의 시장</div>
+   <div style="font-size:54px;font-weight:650;margin-top:60px;line-height:1.3">연결 밖의<br>기존 기기 전체</div>
+   <div style="font-size:30px;color:var(--sec);margin-top:40px;line-height:1.7">· 리모컨 가전<br>· 블루투스 간판 · 라디오<br>· 월패드 · 단종 기기</div></div>
+ </div>
+</section>
+
+<!-- 13 실물 세계의 빈칸 -->
+<section class="slide" data-n="퍼스널 에이전트는 이미 MCP로 온라인 서비스 110여 개를 부릅니다. 하지만 집 안의 기기는 빈칸입니다. 통신사 에이전트는 실행과 결제까지 가려 합니다. 실물 작업에 돈을 내려면 실제로 일어났다는 증거가 필요합니다. 두 빈칸을 KEVIN이 채웁니다.">
+ <h1 class="a">실물 세계의 빈칸</h1>
+ <div class="sub a" style="--d:.1">에이전트 플랫폼 · 온라인 실행은 연결 · 실물은 비어 있음</div>
+ <div class="a card" style="--d:.3;position:absolute;left:120px;top:300px;width:1680px;height:290px;padding:40px">
+  <div style="font-size:30px;color:var(--mut)">퍼스널 에이전트 · VOOY</div>
+  <div style="display:flex;gap:16px;margin-top:30px;width:980px;flex-wrap:wrap">
+   <span class="chip" style="color:var(--sec)">검색</span><span class="chip" style="color:var(--sec)">예약</span><span class="chip" style="color:var(--sec)">주문</span><span class="chip" style="color:var(--sec)">결제</span><span class="chip" style="color:var(--sec)">MCP 서비스 110여 개</span></div>
+  <div class="slot" style="position:absolute;right:40px;top:40px;width:560px;height:210px">
+   <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--dim)">집 안 실물 기기</div>
+   <div class="fillin" style="--d:1.4"><div style="font-size:44px;color:var(--acc);font-weight:650">KEVIN</div><div style="font-size:26px;color:var(--sec)">실물 기기 MCP 도구 팩</div></div></div>
+ </div>
+ <div class="a card" style="--d:.6;position:absolute;left:120px;top:620px;width:1680px;height:290px;padding:40px">
+  <div style="font-size:30px;color:var(--mut)">통신사 에이전트 · SKT 모두의 AI · Agentic Pay</div>
+  <div style="display:flex;gap:16px;margin-top:30px;width:980px;flex-wrap:wrap">
+   <span class="chip" style="color:var(--sec)">에이전트 실행</span><span class="chip" style="color:var(--sec)">결제</span><span class="chip" style="color:var(--sec)">정산</span></div>
+  <div class="slot" style="position:absolute;right:40px;top:40px;width:560px;height:210px">
+   <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--dim)">실물 실행 증거</div>
+   <div class="fillin" style="--d:2"><div style="font-size:44px;color:var(--acc);font-weight:650">KEVIN</div><div style="font-size:26px;color:var(--sec)">서명된 실물 실행 증명</div></div></div>
+ </div>
+ <div class="foot a" style="--d:2.4">VOOY · 블루밍비트·조선일보 보도 · SKT 트랙 · OBA.RUN 2nd 공지</div>
+</section>
+
+<!-- 14 판매처 · 과금 -->
+<section class="slide" data-n="그래서 B2B로 팝니다. 가구 하나가 아니라 플랫폼 하나와 계약하면 그 이용자가 한꺼번에 들어옵니다. 연결은 한 번 만들면 모든 플랫폼이 다시 씁니다. 과금은 가설입니다.">
+ <h1 class="a">판매처 · 과금</h1>
+ <div class="sub a" style="--d:.1">플랫폼 1곳 계약 → 이용자 전체 · 연결 1회 → 모든 플랫폼 재사용 · 과금 방식 가설</div>
+ <div id="buyers" style="position:absolute;left:120px;top:290px;width:1680px;display:grid;grid-template-columns:repeat(4,1fr);gap:28px"></div>
+ <div style="position:absolute;left:120px;top:800px;width:1680px;height:130px" class="a card" >
+  <div class="flowline" style="left:160px;top:64px;width:1360px;height:3px"></div>
+  <div class="dot doth" style="left:152px;top:56px;--len:1360px;--d:1.5"></div>
+  <div style="position:absolute;inset:0;display:flex;justify-content:space-around;align-items:center;font-size:30px">
+   <span style="background:var(--s1);padding:0 20px">에이전트 요청</span><span style="background:var(--s1);padding:0 20px">실물 실행</span><span style="background:var(--s1);padding:0 20px;color:var(--rose)">서명 증명</span><span style="background:var(--s1);padding:0 20px;color:var(--teal)">결제 · 정산</span></div>
+ </div>
+</section>
+
+<!-- VC 사업 모델 -->
+<section class="slide" data-n="사업 모델은 쌓일수록 강해집니다. 커넥터는 한 번 만들면 모든 고객과 에이전트가 재사용하고, 실행 전후 기록은 경쟁사가 갖지 못한 실물 실행 데이터로 쌓입니다. 과금은 B2B 플랫폼 단위이며 가설입니다.">
+ <h1 class="a">사업 모델 · 쌓일수록 강해지는 구조</h1>
+ <div class="sub a" style="--d:.1">앱 판매 아닌 B2B 플랫폼 과금 · 연결이 늘수록 한계비용 감소</div>
+ <div class="a card" style="--d:.3;position:absolute;left:120px;top:300px;width:820px;height:620px;padding:44px">
+  <div style="font-size:30px;color:var(--acc)">해자 ① 커넥터 라이브러리</div>
+  <svg viewBox="0 0 720 360" style="width:720px;height:360px;margin-top:20px">
+   <line x1="40" y1="320" x2="700" y2="320" stroke="#404040" stroke-width="3"/><line x1="40" y1="320" x2="40" y2="20" stroke="#404040" stroke-width="3"/>
+   <path class="draw" d="M40 300 C200 290 320 240 420 170 C520 100 600 50 690 30" fill="none" stroke="#9c86ff" stroke-width="6" pathLength="1"/>
+   <path class="draw" d="M40 90 C200 150 320 230 460 270 C560 295 640 305 690 308" fill="none" stroke="#5fc2c9" stroke-width="6" pathLength="1" style="--d:.4"/>
+   <text x="600" y="22" fill="#9c86ff" font-size="26">재사용 가치</text><text x="470" y="262" fill="#5fc2c9" font-size="26">기기당 연결 비용</text>
+   <text x="430" y="352" fill="#a3a3a3" font-size="24">연결된 기기 종류 →</text></svg>
+  <div style="font-size:28px;color:var(--sec);margin-top:10px">연결 1회 → 같은 기기 사용자 전원 · MCP 에이전트 전체 재사용</div>
+ </div>
+ <div class="a card" style="--d:.6;position:absolute;left:980px;top:300px;width:820px;height:290px;padding:40px">
+  <div style="font-size:30px;color:var(--rose)">해자 ② 실물 실행 데이터</div>
+  <div style="font-size:30px;color:var(--sec);margin-top:24px;line-height:1.7">실행 전후 사진 · 측정값 · 서명 기록 누적<br>physical AI 학습 · 검증 데이터 자산</div></div>
+ <div class="a card" style="--d:.9;position:absolute;left:980px;top:630px;width:820px;height:290px;padding:40px">
+  <div style="font-size:30px;color:var(--teal)">과금 · 가설</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 30px;margin-top:22px;font-size:26px;color:var(--sec)">
+   <div>퍼스널 에이전트 <span style="color:var(--mut)">· 기기당 월</span></div><div>통신사 <span style="color:var(--mut)">· 가구당 · 증명 건당</span></div>
+   <div>건설 · 월패드 <span style="color:var(--mut)">· 단지 계약</span></div><div>제조사 <span style="color:var(--mut)">· 모델 라이선스</span></div></div></div>
+</section>
+
+<!-- VC 확장 경로 -->
+<section class="slide" data-n="같은 실행 계층으로 고객만 바꿔 갑니다. 지금은 집, 다음은 매장과 오락실, 그다음은 굴삭기·의료기기·안전장비·엘리베이터 같은 산업 현장입니다. 산업 단계 매출은 근거가 없어 숫자를 넣지 않았습니다.">
+ <h1 class="a">확장 경로 · 집에서 산업으로</h1>
+ <div class="sub a" style="--d:.1">같은 실행 계층 · 고객만 바뀜</div>
+ <div style="position:absolute;left:120px;top:330px;width:1680px;height:600px">
+  <div class="a" style="--d:.2;position:absolute;left:0;bottom:0;width:520px;height:300px" ><div class="card" style="height:100%;padding:36px;border-color:var(--teal)"><div style="font-size:26px;color:var(--teal)">1단계 · 지금</div><div style="font-size:44px;margin-top:10px">가정</div><div style="margin-top:20px;display:flex;gap:18px"><span data-h='[["sign","전광판"],["radio","라디오"],["tv","TV"],["wallpad","월패드"]]'></span></div><div style="font-size:24px;color:var(--mut);margin-top:20px">판매처 · 퍼스널 에이전트 · 통신사</div></div></div>
+  <div class="a" style="--d:.6;position:absolute;left:580px;bottom:0;width:520px;height:440px"><div class="card" style="height:100%;padding:36px;border-color:var(--lime)"><div style="font-size:26px;color:var(--lime)">2단계</div><div style="font-size:44px;margin-top:10px">매장 · 오락실</div><div style="margin-top:20px;display:flex;gap:18px"><span data-h='[["building","매장 간판"],["users","오락실"],["light","조명"]]'></span></div><div style="font-size:24px;color:var(--mut);margin-top:20px">판매처 · 프랜차이즈 · 오락기 운영사</div></div></div>
+  <div class="a" style="--d:1;position:absolute;left:1160px;bottom:0;width:520px;height:600px"><div class="card" style="height:100%;padding:36px;border-color:var(--acc)"><div style="font-size:26px;color:var(--acc)">3단계</div><div style="font-size:44px;margin-top:10px">산업 현장</div><div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:22px"><span data-h='[["excavator","굴삭기"],["medical","의료기기"],["helmet","안전장비"],["elevator","엘리베이터"]]'></span></div><div style="font-size:24px;color:var(--mut);margin-top:24px">판매처 · 장비 제조사 · 유지보수사</div></div></div>
+ </div>
+</section>
+
+<!-- 15 시장 근거 · 매출 가정 -->
+<section class="slide" data-n="수요 근거는 출처가 있는 숫자만 썼습니다. 아래 매출은 플랫폼을 통해 닿는 최종 이용자 기준 가정입니다. 보수 100억, 기준 136억, 확장 680억 원.">
+ <h1 class="a">시장 근거 · 매출 가정</h1>
+ <div style="position:absolute;left:120px;top:280px;width:760px">
+  <div class="a" style="--d:.2"><div style="font-size:84px;font-weight:650;color:var(--acc)">약 95억 달러</div><div style="font-size:28px;color:var(--sec)">국내 핵심 스마트홈 시장 2026 · 연 17% 성장 전망</div><div style="font-size:22px;color:var(--dim)">Mordor Intelligence</div></div>
+  <div class="a" style="--d:.4;margin-top:44px"><div style="font-size:84px;font-weight:650;color:var(--teal)">68만 대 · 170만 명</div><div style="font-size:28px;color:var(--sec)">헤이홈 IR 허브 누적 판매 · 앱 가입자 · 구형 가전 원격 제어 수요</div><div style="font-size:22px;color:var(--dim)">헤이홈 공개 자료</div></div>
+  <div class="a" style="--d:.6;margin-top:44px"><div style="font-size:84px;font-weight:650;color:var(--lime)">2,040만 톤</div><div style="font-size:28px;color:var(--sec)">2022 소형 가전 폐기 · 공식 회수 12%</div><div style="font-size:22px;color:var(--dim)">Global E-waste Monitor 2024 (UNITAR·ITU)</div></div>
+ </div>
+ <div class="a card" style="--d:.3;position:absolute;left:960px;top:280px;width:840px;height:680px;padding:40px">
+  <div style="font-size:30px;color:var(--sec)">연 매출 가정 · 최종 이용자 기준 · B2B2C</div>
+  <div style="position:absolute;left:60px;right:60px;bottom:150px;height:400px;display:flex;align-items:flex-end;justify-content:space-around">
+   <div style="text-align:center;width:180px"><div style="font-size:34px;margin-bottom:10px">100억</div><div class="grow" style="--d:.9;height:59px;background:var(--line);border-radius:12px 12px 0 0"></div></div>
+   <div style="text-align:center;width:180px"><div style="font-size:34px;margin-bottom:10px">136억</div><div class="grow" style="--d:1.1;height:80px;background:var(--teal);border-radius:12px 12px 0 0"></div></div>
+   <div style="text-align:center;width:180px"><div style="font-size:34px;margin-bottom:10px;color:var(--acc)">680억</div><div class="grow" style="--d:1.3;height:400px;background:var(--acc);border-radius:12px 12px 0 0"></div></div>
+  </div>
+  <div style="position:absolute;left:60px;right:60px;bottom:40px;display:flex;justify-content:space-around;text-align:center;font-size:24px;color:var(--mut);line-height:1.5">
+   <div style="width:180px">보수<br>17만 가구</div><div style="width:180px">기준<br>23만 가구</div><div style="width:180px">확장<br>115만 가구</div></div>
+ </div>
+ <div class="foot a" style="--d:1.6">가정 · 연 5만 9천 원(월 4,900원) · 이용률·가격 미검증 · 국내 가구 약 2,300만 근사치</div>
+</section>
+
+<!-- 16 마무리 -->
+<section class="slide" data-n="어떤 기기든, AI의 도구로. KEVIN이었습니다.">
+ <div class="a" style="position:absolute;left:120px;top:380px;font-size:130px;font-weight:650;letter-spacing:-3px">어떤 기기든, AI의 도구로</div>
+ <div class="a" style="--d:.5;position:absolute;left:120px;top:560px;font-size:46px;color:var(--acc)">KEVIN · physical AI를 위한 VLM 실행 계층</div>
+ <div class="a" style="--d:1;position:absolute;left:120px;top:880px;font-size:30px;color:var(--mut);line-height:1.6">github.com/sergiobuilds/kevin<br>OBA.RUN 2nd 해커톤</div>
+</section>
+
+</div>
+<div id="notes"></div><div id="num"></div>
+<script>
+var I={brain:'<path d="M52 15 C28 3 20 23 23 36 C2 43 5 65 20 70 C7 94 32 115 53 99 V20 M67 15 C91 3 99 23 96 36 C117 43 114 65 99 70 C112 94 87 115 66 99 V20"/>',
+camera:'<rect x="4" y="30" width="112" height="78" rx="8"/><path d="M38 30 L46 12 H74 L82 30"/><circle cx="60" cy="68" r="22"/>',
+sign:'<rect x="4" y="24" width="112" height="52" rx="8"/><path d="M30 76 V112 M90 76 V112"/><circle cx="26" cy="50" r="3"/><circle cx="44" cy="50" r="3"/><circle cx="62" cy="50" r="3"/><circle cx="80" cy="50" r="3"/><circle cx="98" cy="50" r="3"/>',
+radio:'<rect x="4" y="32" width="112" height="80" rx="8"/><path d="M24 32 L92 6"/><circle cx="40" cy="72" r="20"/><path d="M76 58 H100 M76 74 H100 M76 90 H100"/>',
+clock:'<circle cx="60" cy="60" r="49"/><path d="M60 25 V60 L84 74"/>',
+code:'<path d="M34 25 L5 57 L34 89 M85 25 L114 57 L85 89 M71 7 L49 110"/>',
+rocket:'<path d="M39 78 C27 40 56 12 105 5 C108 52 80 82 42 86 Z M39 46 L15 47 L5 80 L35 73 M70 83 L71 107 L39 117 L46 87"/><circle cx="77" cy="34" r="11"/>',
+award:'<circle cx="60" cy="43" r="33"/><path d="M37 70 L24 115 L60 96 L96 115 L83 70"/>',
+train:'<rect x="10" y="16" width="100" height="72" rx="8"/><path d="M10 52 H110 M32 16 V52 M88 16 V52 M2 116 H118"/><circle cx="34" cy="100" r="10"/><circle cx="86" cy="100" r="10"/>',
+tv:'<rect x="4" y="16" width="112" height="76" rx="8"/><path d="M40 116 H80 M60 92 V116"/>',
+wallpad:'<rect x="18" y="4" width="84" height="112" rx="8"/><rect x="32" y="20" width="56" height="40" rx="6"/><circle cx="44" cy="84" r="8"/><circle cx="76" cy="84" r="8"/>',
+robot:'<circle cx="60" cy="62" r="52"/><circle cx="60" cy="62" r="22"/><path d="M60 10 V28"/>',
+light:'<path d="M36 80 C14 62 18 14 60 10 C102 14 106 62 84 80 V96 H36 Z M44 112 H76"/>',
+bt:'<path d="M34 34 L86 82 L60 106 V14 L86 38 L34 86"/>',
+ir:'<rect x="30" y="4" width="60" height="112" rx="8"/><circle cx="60" cy="30" r="9"/><path d="M44 62 H76 M44 80 H76 M44 98 H76"/>',
+wifi:'<path d="M8 44 C38 14 82 14 112 44 M26 64 C46 44 74 44 94 64 M44 84 C54 74 66 74 76 84"/><circle cx="60" cy="102" r="5"/>',
+rabbit:'<path d="M44 52 C30 30 30 6 40 4 C52 4 54 30 54 50 M76 52 C90 30 90 6 80 4 C68 4 66 30 66 50"/><circle cx="60" cy="80" r="34"/>',
+question:'<circle cx="60" cy="60" r="52"/><path d="M40 44 C40 22 80 22 80 44 C80 60 60 60 60 76"/><circle cx="60" cy="94" r="3"/>',
+flame:'<path d="M60 116 C24 116 12 84 30 58 C40 44 44 30 40 8 C66 22 84 44 82 70 C90 62 92 52 90 44 C108 66 102 116 60 116 Z"/>',
+shield:'<path d="M60 4 L108 22 V58 C108 88 86 106 60 116 C34 106 12 88 12 58 V22 Z M40 60 L54 74 L82 44"/>',
+building:'<path d="M13 114 V35 L61 6 L109 35 V114 M4 114 H117 M28 48 H40 M55 48 H67 M82 48 H94 M28 68 H40 M55 68 H67 M82 68 H94 M49 114 V89 H73 V114"/>',
+users:'<circle cx="46" cy="29" r="20"/><circle cx="91" cy="44" r="15"/><path d="M6 110 V88 C6 56 85 56 85 88 V110 M89 75 C112 77 117 89 117 110"/>',
+chip:'<rect x="25" y="25" width="70" height="70" rx="8"/><rect x="42" y="42" width="36" height="36" rx="6"/><path d="M35 8 V25 M60 8 V25 M85 8 V25 M35 95 V112 M60 95 V112 M85 95 V112 M8 35 H25 M8 60 H25 M8 85 H25 M95 35 H112 M95 60 H112 M95 85 H112"/>',
+plug:'<path d="M42 4 V30 M78 4 V30 M26 30 H94 V58 C94 80 78 92 60 92 C42 92 26 80 26 58 Z M60 92 V116"/>',
+building2:'<path d="M5 114 H115 M20 114 V20 H70 V114 M70 50 H100 V114 M34 40 H56 M34 60 H56 M34 80 H56"/>'
+};
+function ic(n,s,c){return '<span class="ico" style="width:'+s+'px;height:'+s+'px;color:'+(c||'var(--ink)')+'"><svg viewBox="0 0 120 120">'+(I[n]||'')+'</svg></span>';}
+document.querySelectorAll('[data-i]').forEach(function(e){e.outerHTML=ic(e.dataset.i,parseInt(e.style.width),e.style.color||'');});
+// 8 기기 줄
+var dv=[['sign','전광판'],['radio','라디오'],['train','기차'],['tv','TV'],['wallpad','월패드'],['robot','청소기']],h='';
+dv.forEach(function(d,i){h+='<div class="a" style="--d:'+(1.8+i*.12)+';text-align:center;width:180px">'+ic(d[0],64,'var(--sec)')+'<div style="font-size:26px;color:var(--sec);margin-top:8px">'+d[1]+'</div></div>';});
+document.getElementById('devrow').innerHTML=h;
+// 10
+var any=[['sign','전광판'],['radio','라디오'],['train','장난감 기차'],['tv','TV'],['wallpad','월패드'],['rabbit','단종 기기']];h='<div style="display:flex;gap:26px">';
+any.forEach(function(d,i){h+='<div class="a card" style="--d:'+(.8+i*.15)+';width:150px;height:170px;text-align:center;padding-top:24px">'+ic(d[0],60,'var(--sec)')+'<div style="font-size:22px;color:var(--mut);margin-top:12px">'+d[1]+'</div></div>';});
+h+='</div><div class="a" style="--d:1.8;font-size:50px;color:var(--dim)">→</div><div class="a" style="--d:2;border:3px solid var(--acc);border-radius:24px;padding:30px 40px;background:var(--s2)"><div style="font-size:40px;color:var(--acc);font-weight:650">KEVIN</div></div><div class="a" style="--d:2.2;font-size:50px;color:var(--dim)">→</div><div class="a mono" style="--d:2.4;font-size:26px;color:var(--teal);line-height:1.7">led_scene()<br>radio()<br>say()<br>stop_all()</div>';
+document.getElementById('anyrow').innerHTML=h;
+// 11
+var G=[['bt','블루투스','var(--acc)',[['LED 전광판','on'],['블루투스 라디오','on'],['BLE 조명','pl']]],
+['ir','적외선','var(--rose)',[['장난감 기차 · 신호 확인','pl'],['TV · 에어컨 · 선풍기','pl']]],
+['wifi','와이파이','var(--teal)',[['WLED 조명','im'],['로봇청소기','im'],['스마트 플러그','pl']]],
+['tv','ADB','var(--lime)',[['안드로이드 TV','im']]],
+['wallpad','RS485','var(--acc)',[['아파트 월패드','im']]],
+['camera','카메라','var(--teal)',[['지킴이 모드','im'],['방범 · 현관','im']]],
+['rabbit','서버 종료 기기','var(--rose)',[['Nabaztag 토끼','pl'],['Pebble 시계','im']]],
+['question','모르는 통신법','var(--lime)',[['관찰로 명령 뜻 학습','im']]],
+['flame','가스 · 전기','var(--rose)',[['가스 밸브 · 멀티탭','pl']]]];h='';
+G.forEach(function(g,i){var li='';g[3].forEach(function(x){li+='<div style="font-size:24px;color:var(--sec);margin-top:8px"><span class="s-'+x[1]+'">●</span> '+x[0]+'</div>';});
+ h+='<div class="a card" style="--d:'+(.2+i*.1)+';height:215px;padding:28px 32px;display:flex;gap:28px">'+ic(g[0],70,g[2])+'<div><div style="font-size:34px;font-weight:500">'+g[1]+'</div>'+li+'</div></div>';});
+document.getElementById('wall').innerHTML=h;
+// 12
+var U=[['shield','외출 중 침입','사람 감지 → 전광판 경고 · 음성 경고','im','구현','var(--rose)'],['clock','빈방 절전','한동안 무인 → 전광판 · 라디오 끄기','im','구현','var(--teal)'],['flame','가스 · 전기 차단','켜진 가스불 · 멀티탭 → 차단','pl','예정','var(--rose)'],['building','매장 간판','문구 교체 · 대화 중 음악 줄이기','pl','예정','var(--lime)'],['tv','부모님 댁 TV','엉뚱한 화면 → 보던 채널 복구','im','시험','var(--teal)'],['wallpad','아파트 월패드','다른 등 유지 · 원하는 등만','im','시험','var(--acc)']];h='';
+U.forEach(function(u,i){h+='<div class="a card" style="--d:'+(.2+i*.15)+';height:340px;padding:40px;position:relative">'+ic(u[0],96,u[5])+'<span class="chip s-'+u[3]+'" style="position:absolute;right:36px;top:40px;font-size:22px">'+u[4]+'</span><div style="font-size:42px;margin-top:34px">'+u[1]+'</div><div style="font-size:26px;color:var(--mut);margin-top:16px">'+u[2]+'</div></div>';});
+document.getElementById('cases').innerHTML=h;
+// 14
+var B=[['users','퍼스널 에이전트','VOOY','실물 기기 MCP 도구 팩','활성 기기당 월 · 호출당','var(--acc)'],['wifi','통신사','SKT 에이닷 · 모두의 AI','연결 계층 + 실물 실행 증명','가입 가구당 · 증명 건당','var(--teal)'],['building2','건설 · 월패드','아파트 단지','교체 없는 설비 연결','단지 단위 계약','var(--lime)'],['chip','가전 제조사','단종 모델','서버 종료 후 연결 유지','모델별 라이선스','var(--rose)']];h='';
+B.forEach(function(b,i){h+='<div class="a card" style="--d:'+(.2+i*.15)+';height:460px;padding:40px;border-color:'+b[5]+'">'+ic(b[0],80,b[5])+'<div style="font-size:40px;margin-top:30px">'+b[1]+'</div><div style="font-size:26px;color:var(--mut);margin-top:8px">'+b[2]+'</div><div style="font-size:28px;color:var(--sec);margin-top:40px">'+b[3]+'</div><div style="font-size:24px;color:'+b[5]+';margin-top:16px">'+b[4]+'</div></div>';});
+document.getElementById('buyers').innerHTML=h;
+
+var MI=I;MI.excavator='<path d="M6 104 H86 M14 104 C6 104 6 84 14 84 H78 C86 84 86 104 78 104 M20 84 V62 H60 V84 M60 70 L92 30 L112 52 M112 52 L104 74 H90"/>';
+MI.medical='<rect x="6" y="14" width="108" height="76" rx="8"/><path d="M14 56 H38 L46 36 L58 74 L68 48 L74 56 H106 M60 90 V114 M38 114 H82"/>';
+MI.helmet='<path d="M10 86 C10 40 36 18 60 18 C84 18 110 40 110 86 Z M4 86 H116 V100 H4 Z M60 18 V52 M40 26 V56 M80 26 V56"/>';
+MI.elevator='<rect x="14" y="6" width="92" height="108" rx="6"/><path d="M60 6 V114 M28 50 L40 36 L52 50 M68 70 L80 84 L92 70"/>';
+var mh="";for(var j=0;j<9;j++){mh+='<div class="hole"><div class="mole" style="--d:'+[0,.9,1.7,.5,1.3,.2,1.9,.7,1.1][j]+'"></div></div>';}
+document.getElementById('moles').innerHTML=mh;
+var FU=[['excavator','굴삭기','현장 장비 · 말로 조작'],['medical','의료기기','구형 장비 · 기록 연동'],['helmet','안전장비','경보 · 차단 연동'],['elevator','엘리베이터','호출 · 상태 확인']],fh='';
+FU.forEach(function(f,i){fh+='<div class="a card" style="--d:'+(1.2+i*.2)+';height:300px;padding:36px">'+ic(f[0],96,['var(--acc)','var(--rose)','var(--lime)','var(--teal)'][i])+'<div style="font-size:38px;margin-top:28px">'+f[1]+'</div><div style="font-size:24px;color:var(--mut);margin-top:10px">'+f[2]+'</div></div>';});
+document.getElementById('future').innerHTML=fh;
+function chips(list){return list.map(function(x){return '<div style="text-align:center">'+ic(x[0],56,'var(--sec)')+'<div style="font-size:20px;color:var(--mut);margin-top:6px">'+x[1]+'</div></div>';}).join('');}
+document.querySelectorAll('[data-h]').forEach(function(e){e.outerHTML=chips(JSON.parse(e.dataset.h));});
+
+// ---- KEVIN 앱 재현: 방 + 포켓몬식 걷기 → 말 걸면 얼굴 (메인 앱 app.js와 같은 규칙) ----
+var KI={};['room','kevin_walker','kevin_portrait'].forEach(function(n){KI[n]=new Image();KI[n].src='assets/'+n+'.png';});
+function Kevin(cv){var x=cv.getContext('2d'),TILE=10,A={x0:9,x1:25,y0:10,y1:14},n={tx:16,ty:12,x:160,y:120,face:1,from:null,t0:0,wait:900,last:0},me={view:'room',talk:false,t0:0};
+ function think(t){if(n.from||t-n.last<n.wait)return;n.last=t;n.wait=500+Math.random()*1400;if(Math.random()<.3){n.face=Math.random()<.5?-1:1;return;}
+  var d=[[1,0],[-1,0],[0,1],[0,-1]].filter(function(v){var a=n.tx+v[0],b=n.ty+v[1];return a>=A.x0&&a<=A.x1&&b>=A.y0&&b<=A.y1;});var v=d[Math.floor(Math.random()*d.length)];if(v[0])n.face=v[0];n.from={x:n.x,y:n.y};n.tx+=v[0];n.ty+=v[1];n.t0=t;}
+ function move(t){if(!n.from)return 0;var k=Math.min(1,(t-n.t0)/380);n.x=n.from.x+(n.tx*TILE-n.from.x)*k;n.y=n.from.y+(n.ty*TILE-n.from.y)*k;if(k>=1)n.from=null;return k<1?Math.floor(k*4)%2:0;}
+ function draw(t){x.imageSmoothingEnabled=false;
+  if(me.view=='room'){if(KI.room.complete)x.drawImage(KI.room,0,0,320,200);think(t);var s=move(t),W=KI.kevin_walker;if(W.complete){var h=40,w=Math.round(h*W.width/W.height),px=Math.round(n.x-w/2),py=Math.round(n.y-h+8-s);x.save();if(n.face<0){x.translate(px*2+w,0);x.scale(-1,1);}x.drawImage(W,px,py,w,h);x.restore();}}
+  else{x.fillStyle='#13305a';x.fillRect(0,0,320,200);for(var y=0;y<200;y+=4){x.fillStyle='rgba(255,255,255,.025)';x.fillRect(0,y,320,1);}var P=KI.kevin_portrait;if(P.complete){var hh=200,ww=hh*P.width/P.height,b=me.talk?Math.sin(t/90)*1.5:Math.sin(t/700);x.drawImage(P,(320-ww)/2,b+2,ww,hh);}}
+  requestAnimationFrame(draw);}
+ requestAnimationFrame(draw);return me;}
+var KV=[];document.querySelectorAll('canvas.kv').forEach(function(c){KV.push({el:c,k:Kevin(c)});});
+var seqT=[];function kevinSeq(sl){seqT.forEach(clearTimeout);seqT=[];KV.forEach(function(o){if(!sl.contains(o.el))return;var k=o.k,line=sl.querySelector('.dosline');k.view='room';k.talk=false;if(line)line.textContent='';
+  seqT.push(setTimeout(function(){k.view='talk';},3200));
+  seqT.push(setTimeout(function(){k.talk=true;var s=line.dataset.say,i=0;var iv=setInterval(function(){line.textContent=s.slice(0,++i);if(i>=s.length){clearInterval(iv);setTimeout(function(){k.talk=false;},600);}},55);seqT.push(iv);},3900));
+  seqT.push(setTimeout(function(){kevinSeq(sl);},11000));});}
+var FN=[['users','가위바위보','판정은 규칙 · 점수 기억','var(--acc)'],['sign','자유 문구','생일 · 점수판 · 퀴즈','var(--lime)'],['radio','작곡','멜로디 생성 → 라디오','var(--teal)'],['brain','대화 기억','이름 · 점수 · 취향','var(--rose)']],fh2='';
+I.brain='<path d="M52 15 C28 3 20 23 23 36 C2 43 5 65 20 70 C7 94 32 115 53 99 V20 M67 15 C91 3 99 23 96 36 C117 43 114 65 99 70 C112 94 87 115 66 99 V20"/>';
+FN.forEach(function(f,i){fh2+='<div class="a card" style="--d:'+(.8+i*.2)+';height:300px;padding:36px">'+ic(f[0],80,f[3])+'<div style="font-size:38px;margin-top:28px">'+f[1]+'</div><div style="font-size:24px;color:var(--mut);margin-top:10px">'+f[2]+'</div></div>';});
+document.getElementById('fun').innerHTML=fh2;
+
+
+var S=[].slice.call(document.querySelectorAll('.slide')),k=0,N=document.getElementById('notes'),st=document.getElementById('stage');
+var PRINT=location.search.indexOf('print')>=0;
+if(PRINT){document.body.classList.add('print');document.querySelectorAll('video').forEach(function(v){var im=document.createElement('img');im.src=v.getAttribute('poster');im.className=v.className||'';im.style.cssText='width:100%;height:100%;object-fit:cover;position:'+(v.parentNode.classList.contains('vert')?'static':'absolute')+';inset:0';v.replaceWith(im);});}
+function fit(){if(PRINT)return;var s=Math.min(innerWidth/1920,innerHeight/1080);st.style.transform='scale('+s+')';st.style.left=(innerWidth-1920*s)/2+'px';st.style.top=(innerHeight-1080*s)/2+'px';}
+function go(n){if(PRINT)return;k=Math.max(0,Math.min(S.length-1,n));S.forEach(function(s,j){s.classList.toggle('on',j==k);s.querySelectorAll('video').forEach(function(v){if(j==k){v.currentTime=0;v.play();}else v.pause();});});N.textContent=S[k].dataset.n;kevinSeq(S[k]);document.getElementById('num').textContent=(k+1)+' / '+S.length;history.replaceState(null,'','#'+(k+1));}
+addEventListener('resize',fit);fit();
+addEventListener('keydown',function(e){if(['ArrowRight',' ','PageDown','Enter'].indexOf(e.key)>=0)go(k+1);else if(['ArrowLeft','PageUp','Backspace'].indexOf(e.key)>=0)go(k-1);else if(e.key=='Home')go(0);else if(e.key=='End')go(S.length-1);else if(e.key=='n'||e.key=='N')N.style.display=N.style.display=='block'?'none':'block';else if(e.key=='f'||e.key=='F')document.documentElement.requestFullscreen();else if(e.key=='r'||e.key=='R'){var c=k;S[c].classList.remove('on');setTimeout(function(){go(c)},60);}});
+addEventListener('click',function(){go(k+1)});
+go((parseInt(location.hash.slice(1))||1)-1);
+</script></body></html>
