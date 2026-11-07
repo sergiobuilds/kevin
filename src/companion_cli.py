@@ -257,7 +257,7 @@ class Game:
                     else:
                         self.waiting = False
                         self.job = None
-                        self.mode = 'error' if status in ('error', 'unsupported') else 'stopped' if status == 'stopped' else 'room'
+                        self.mode = 'error' if status in ('error', 'unsupported') else 'stopped' if status == 'stopped' else 'talk'
                         if status == 'stopped':
                             self.executing_live = False
         if not self.pending and not self.request_pending and time.monotonic() >= self.poll_at:
