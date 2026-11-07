@@ -206,15 +206,15 @@ class Bridge:
     def say(self, text):
         with self.lock:
             state = self.c.get_state()
-            if state['status'] in ('queued', 'planning', 'rendering', 'sending', 'audio', 'stopping'):
-                return {'reply': '잠깐, 아직 하던 거 하는 중이야.', 'busy': True}
             current = dict(state.get('recipe') or {})
             p, source = plan(text, current)
             if p['mode'] == 'unsupported':
                 return {'reply': p['explanation'], 'plan': p, 'source': source}
             if p['mode'] == 'stop':
+                self.c.supersede()
                 self.c.stop()
                 return {'reply': p['explanation'], 'plan': p, 'source': source}
+            self.c.supersede()
             self.c.planner = lambda _t, _r, p=p: dict(p)
             try:
                 self.c.command(text, self.c.live_configured)

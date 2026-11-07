@@ -149,6 +149,24 @@ class ShowController:
                              execute, recipe, current), daemon=True).start()
         return {'job_id': job_id, 'status': 'queued'}
 
+    def supersede(self, wait=6.0):
+        """Drop the job in flight so a newer request runs now (people talk over KEVIN)."""
+        import time
+        end = time.monotonic() + wait
+        while True:
+            with self.lock:
+                status = self.state['status']
+                if status not in ACTIVE:
+                    return False
+                if status != 'stopping':
+                    self.cancel.set()
+                    self.applied_scene = None
+                    self.state.update(status='idle', message='새 요청으로 바꿀게.')
+                    return True
+            if time.monotonic() > end:
+                return False
+            time.sleep(.1)
+
     def _update(self, cancel, **fields):
         with self.lock:
             if self.cancel is not cancel or cancel.is_set() or self.closed:
