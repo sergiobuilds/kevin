@@ -11,3 +11,15 @@
 | 로컬 Ollama 계획 | [show_intent.py](../src/show_intent.py)의 `interpret`, `ground`. 외부 계획 실패 시 로컬 해석 경로와 명시 단어 보정 | [test_show_intent.py](../tests/test_show_intent.py)의 규칙·입출력 검사. 로컬 서버/모델이 준비돼야 동작하며 모든 웹 대화·TTS·vision 기능의 완전한 오프라인 동등성을 주장하지 않음 |
 
 모델 이름은 구성 기본값일 뿐 실제 계정에서의 사용 가능성·우수성·스폰서 인정 증거가 아닙니다. 키는 브리지에서 읽으며 클라우드 경로를 사용하면 요청 텍스트·이미지 등 해당 입력이 서비스에 전송됩니다.
+
+## 장치 라이브러리와 프로토콜
+
+| 재사용 | 구현·목적 | 검증 범위 |
+|---|---|---|
+| pypixelcolor 0.5.0 | [show_transport.py](../src/show_transport.py), BLE 프레임 인코딩·ACK·native 표시 명령 | [test_pypixelcolor_contract.py](../tests/test_pypixelcolor_contract.py), [test_show_control.py](../tests/test_show_control.py): 라이브러리 + fake BLE session. 행사장 LED 기록은 [README 실물 표](../README.md)와 구분 |
+| python-wled | [devices/light.py](../src/devices/light.py), 구역 밝기 변경·재조회 | [test_device_light.py](../tests/test_device_light.py), [test_wled_sim.py](../tests/test_wled_sim.py): 로컬 HTTP 가상 장치. 실제 WLED 하드웨어 확인 아님 |
+| adb-shell / python-broadlink | [devices/tv.py](../src/devices/tv.py), [devices/ir.py](../src/devices/ir.py): ADB 상태·복원, IR 학습·전송 | [test_device_tv.py](../tests/test_device_tv.py), [test_device_ir.py](../tests/test_device_ir.py): 로컬 TCP/UDP 시뮬레이터. 실제 TV·IR 수신 대상의 결과와 다름 |
+| HA REST / Valetudo API | [devices/wallpad.py](../src/devices/wallpad.py), [devices/vacuum.py](../src/devices/vacuum.py): 설정한 조명 채널·청소 구역만 제어 | 로컬 HTTP 가상 서버와 재조회 검사. HA·Valetudo 소스/펌웨어를 실행한 검증이나 월패드 RS485 직접 구현이 아님 |
+| Pillow / cryptography | [receipt.py](../src/receipt.py): 영상 변화 계산·사진 해시·Ed25519 묶음 | [test_receipt.py](../tests/test_receipt.py): 생성 이미지·무결성 회귀. 실물 목표 달성·신뢰할 서명자 신원 인증은 별도 |
+
+정확한 버전·라이선스·출처와 코드 복사 여부는 [데모 문서의 재사용 표](HACKATHON_DEMO.md#출처와-재사용-범위)를 기준으로 합니다. 외부 프로젝트를 자체 개발 성과나 후원 관계로 표현하지 않습니다.
