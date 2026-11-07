@@ -71,6 +71,7 @@ flowchart LR
 
 AI가 기기를 마음대로 조작하지 않도록 경계를 두었습니다.
 
+- **가벼운 모델 + 단어 보정.** 노트북에서 도는 qwen2.5 3B가 문장을 0.5초 안에 해석합니다. 작은 모델은 “보라색”을 다른 색으로, “산타”를 기차로 바꾸는 식으로 흔들리기 때문에, 문장에 실제로 나온 단어(색 이름, 산타·기차, 눈, 음악, 전부 멈춰)가 모델 판단보다 우선합니다. 문장에 없는 항목은 바뀌지 않습니다.
 - **언어 모델은 계획만 만듭니다.** 출력은 JSON Schema로 고정되어 장면, 속도, 눈, 하늘색, 음악, 볼륨만 바꿀 수 있습니다. 지원하지 않는 요청은 `unsupported`로 돌려보내고 일부만 몰래 실행하지 않습니다.
 - **기기 조작은 컨트롤러만 합니다.** 계획을 다시 검증한 뒤 장면을 그려 보내며, 실행 중 새 요청이나 Esc가 오면 이전 작업을 취소합니다.
 - **기본은 미리보기입니다.** `--live`와 기기 주소를 함께 지정했을 때만 실물로 내보냅니다.
@@ -103,7 +104,7 @@ py -m venv .venv
 .venv\Scripts\pip install -r requirements-live.txt
 $env:TERMINATOR_LED_ADDRESS = "<전광판 BLE 주소>"
 $env:TERMINATOR_RADIO_DEVICE = "<블루투스 라디오 장치 이름>"
-$env:TERMINATOR_OLLAMA_MODEL = "qwen2.5:7b"
+$env:TERMINATOR_OLLAMA_MODEL = "qwen2.5:3b"   # 가벼운 모델 + 단어 보정
 .\terminator.cmd --live
 ```
 
@@ -132,7 +133,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 | 기기 | 상태 |
 |---|---|
-| 디라이브 133×19.2cm LED 전광판 (iPixel Color, 144×16) | 기종 조회, 문구·GIF 전송과 표시 확인 |
+| 디라이브 133×19.2cm LED 전광판 (iPixel Color, 144×16) | 행사장에서 한국어 문장 → AI 계획 → 32프레임 전송까지 전광판 수신 확인 (해석 약 1초, 전송 약 16초) |
 | 코비 CRF-35B 블루투스 라디오 | 캐럴 재생 청취 확인 |
 | MYKA FORT 90995 리모컨 기차 | 리모컨이 적외선 방식임을 확인. 적외선 송신 경로 연결 진행 중 |
 
