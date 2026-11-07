@@ -90,13 +90,48 @@ COLORS = {
     "밤하늘": "#0b1a3a",
 }
 _STOP_ALL = re.compile(r"(전부|모두|다|전체|싹|all|everything).{0,4}(멈|정지|꺼|그만|중지|stop)|^(멈춰|정지|그만|stop)[!. ]*$", re.I)
-_MUSIC = re.compile(r"음악|캐럴|캐롤|노래|라디오|music|song|carol", re.I)
-_OFF = re.compile(r"꺼|끄|멈|정지|그만|중지|stop|off", re.I)
-_ON = re.compile(r"틀|켜|재생|play|on\b|들려", re.I)
+_MUSIC = re.compile(r"음악|캐럴|캐롤|노래|라디오|\b(?:music|song|carol|radio)\b", re.I)
+_MUSIC_OFF = re.compile(r"꺼|끄|멈|정지|그만|중지|\b(?:stop|pause|off)\b", re.I)
+_MUSIC_ON = re.compile(r"틀|켜|재생|들려|\b(?:play|start|resume|on)\b", re.I)
+_OTHER_TARGET = re.compile(r"산타|기차|하늘|배경|전광판|조명|눈|티비|\b(?:santa|train|sky|background|sign|light|snow|tv)\b", re.I)
+_MUSIC_RETAIN = re.compile(r"그대로|유지|건드리지|바꾸지|변경하지|\bunchanged\b|\bas\s+is\b|\bleave\b.*\balone\b", re.I)
+_MUSIC_NEGATED = re.compile(
+    r"(?:틀|켜|재생|들려|꺼|끄|멈추|정지|중지).{0,8}지\s*(?:말|마|않)|"
+    r"(?:안|못)\s*(?:틀|켜|재생|꺼|끄)|\b(?:do\s+not|don't|never)\b", re.I)
 _SNOW = re.compile(r"눈|snow", re.I)
 _SKY = re.compile(r"하늘|배경|sky|background", re.I)
 _SPEED = re.compile(r"빨리|빠르|천천히|느리|느리게|속도|fast|slow|speed", re.I)
 _VOLUME = re.compile(r"소리|볼륨|음량|크게|작게|조용|시끄|줄여|낮춰|키워|높여|volume|louder|quieter|quiet", re.I)
+
+
+def _ground_music(text, model_action):
+    """Correct only explicit music clauses; leave ambiguous wording to the model.
+
+    In a mixed request, "turn Santa on" says nothing about radio playback.
+    This deliberately handles a small set of boundaries and negations rather
+    than trying to replace the language model with a general-purpose parser.
+    """
+    actions = []
+    clauses = re.split(r"[,;.!?]|\b(?:and|but|then)\b", text, flags=re.I)
+    for clause in clauses:
+        for part in _OTHER_TARGET.split(clause):
+            mention = _MUSIC.search(part)
+            if mention is None:
+                continue
+            # Korean action verbs follow the target; discard verbs belonging to
+            # a preceding target. English needs "stop the music" before it.
+            local = part[mention.start():] if re.search(r"[가-힣]", mention.group()) else part
+            if _MUSIC_RETAIN.search(local) or _MUSIC_NEGATED.search(local):
+                actions.append('keep')
+                continue
+            on, off = bool(_MUSIC_ON.search(local)), bool(_MUSIC_OFF.search(local))
+            if on != off:
+                actions.append('play' if on else 'stop')
+            elif not on and _VOLUME.search(local):
+                actions.append('keep')
+            else:
+                actions.append(model_action)
+    return actions[0] if actions and len(set(actions)) == 1 else model_action
 
 
 def ground(prompt, spec, current):
@@ -110,6 +145,10 @@ def ground(prompt, spec, current):
     current = current or {}
     out = dict(spec)
     keep = {"preset": "keep", "speed": None, "snow": "keep", "sky": "keep", "music": "keep", "volume": None}
+    # A refusal can cover an unsupported clause in an otherwise valid sentence.
+    # Keywords must never turn that refusal into a partial hardware action.
+    if out["mode"] == "unsupported":
+        return dict(out, **keep)
     if _STOP_ALL.search(text):
         return dict(out, mode="stop", **dict(keep, music="stop"))
     if "산타" in text or re.search(r"santa", text, re.I):
@@ -119,7 +158,7 @@ def ground(prompt, spec, current):
     elif not re.search(r"크리스마스|christmas|장면|scene", text, re.I):
         out["preset"] = "keep"
     if _MUSIC.search(text):
-        out["music"] = "stop" if _OFF.search(text) and not _ON.search(text) else "play"
+        out["music"] = _ground_music(text, out["music"])
     else:
         out["music"] = "keep"
     if _SNOW.search(text):
@@ -150,7 +189,7 @@ def ground(prompt, spec, current):
     if not changed:
         return dict(out, mode="unsupported", **keep,
                     explanation="그건 지금 내가 움직일 수 있는 기기로는 못 해. 전광판이랑 라디오는 바로 바꿀 수 있어!")
-    if out["mode"] in ("stop", "unsupported"):
+    if out["mode"] == "stop":
         out["mode"] = "update" if current else "start"
     out["explanation"] = reply(out, current)
     return out

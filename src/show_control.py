@@ -99,6 +99,9 @@ class ShowController:
         self.closed = False
         self.audio_prepared = False
         self.applied_scene = None
+        self.applied_recipe = copy.deepcopy(DEFAULT_RECIPE)
+        self.preview_recipe = None
+        self.preview_scene = None
         self.state = dict(status='idle', message='말 걸어줘.', job_id=None, revision=0,
                           recipe=copy.deepcopy(DEFAULT_RECIPE),
                           transport={'status': 'not_sent', 'physical_verified': False},
@@ -107,12 +110,13 @@ class ShowController:
     @property
     def live_configured(self):
         return (self.config.get('KEVIN_SHOW_LIVE') == '1' and
-                bool(self.config.get('KEVIN_LED_ADDRESS', '').strip()) and
-                self.config.get('KEVIN_RADIO_DEVICE') == 'CRF-35B')
+                (bool(self.config.get('KEVIN_LED_ADDRESS', '').strip()) or
+                 self.config.get('KEVIN_RADIO_DEVICE') == 'CRF-35B'))
 
     def get_state(self):
         with self.lock:
             result = copy.deepcopy(self.state)
+            result['applied_recipe'] = copy.deepcopy(self.applied_recipe)
         result.update(live_configured=self.live_configured,
                       voice_configured=bool(self.config.get('KEVIN_ASR_URL') and
                                             self.config.get('KEVIN_ASR_TOKEN')),
@@ -128,7 +132,7 @@ class ShowController:
         if type(execute) is not bool:
             raise ShowError('execute must be a boolean')
         if execute and not self.live_configured:
-            raise ShowError('live execution requires server live, panel and CRF-35B configuration')
+            raise ShowError('live execution requires server live and a configured device')
         if scene is not None:
             scene = copy.deepcopy(pixels.validate(scene))
             if scene['duration'] % 10:
@@ -140,13 +144,18 @@ class ShowController:
                 raise ShowError('show job active; stop it before another command')
             cancel = self.cancel = threading.Event()
             job_id = uuid.uuid4().hex
-            recipe = copy.deepcopy(self.state['recipe'])
-            current = copy.deepcopy(scene if scene is not None else self.state.get('scene'))
+            recipe = copy.deepcopy(self.applied_recipe if execute or self.preview_recipe is None
+                                   else self.preview_recipe)
+            current = copy.deepcopy(scene if scene is not None else (
+                self.applied_scene if execute or self.preview_recipe is None else self.preview_scene))
+            # MCP and the UI may temporarily supply a planner. Capture it before
+            # returning so a background job cannot observe a replacement.
+            planner = self.planner
             self.state.update(status='queued', job_id=job_id, message='응, 들었어.',
                               transcript=prompt.strip())
             self.state.pop('plan', None)
             threading.Thread(target=self._run, args=(job_id, cancel, prompt.strip(),
-                             execute, recipe, current), daemon=True).start()
+                             execute, recipe, current, planner, scene is not None), daemon=True).start()
         return {'job_id': job_id, 'status': 'queued'}
 
     def _update(self, cancel, **fields):
@@ -159,8 +168,22 @@ class ShowController:
         with self.lock:
             self._update(cancel, recipe=recipe)
             if self.state.get('scene') != scene:
-                self.state['scene'] = copy.deepcopy(scene)
+                if scene is None:
+                    self.state.pop('scene', None)
+                else:
+                    self.state['scene'] = copy.deepcopy(scene)
                 self.state['revision'] += 1
+
+    def _commit_applied(self, cancel, recipe, fields, scene=None):
+        with self.lock:
+            check_cancel(cancel)
+            self._update(cancel)
+            for field in fields:
+                self.applied_recipe[field] = recipe[field]
+            if scene is not None:
+                self.applied_scene = copy.deepcopy(scene)
+            self.preview_recipe = self.preview_scene = None
+            self._commit_scene(cancel, copy.deepcopy(self.applied_recipe), self.applied_scene)
 
     def _prepare_audio(self, cancel):
         import oba_christmas_show
@@ -183,11 +206,13 @@ class ShowController:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def _run(self, job_id, cancel, prompt, execute, recipe, scene):
+    def _run(self, job_id, cancel, prompt, execute, recipe, scene, planner, explicit_scene):
         stage = 'planning'
+        starting_music = False
+        visual_applied = False
         try:
             self._update(cancel, status=stage, message='음… 어떻게 할지 생각 중.')
-            raw = (self.planner(prompt, copy.deepcopy(recipe)) if self.planner else
+            raw = (planner(prompt, copy.deepcopy(recipe)) if planner else
                    interpret(prompt, copy.deepcopy(recipe), self.config))
             check_cancel(cancel)
             plan = normalized_plan(raw)
@@ -205,23 +230,38 @@ class ShowController:
             for key in ('preset', 'snow', 'sky', 'music', 'speed', 'volume'):
                 if plan[key] not in (None, 'keep'):
                     recipe[key] = plan[key]
-            visual_change = any(previous[k] != recipe[k] for k in ('preset', 'snow', 'sky'))
-            stage = 'rendering'
-            self._update(cancel, status=stage, message='장면 그리는 중이야.')
-            if scene is None or visual_change:
-                scene = self.renderer(recipe)
-            elif recipe['speed'] != previous['speed']:
-                # Keep manually edited pixels when only changing playback speed.
-                scene['duration'] = max(40, min(5000, round(
-                    scene['duration'] * previous['speed'] / recipe['speed'] / 10) * 10))
-            scene = pixels.validate(scene)
-            self._commit_scene(cancel, recipe, scene)
+            visual_fields = ('preset', 'snow', 'sky', 'speed')
+            visual_requested = explicit_scene or any(plan[k] not in (None, 'keep') for k in visual_fields)
+            radio_requested = plan['music'] != 'keep' or plan['volume'] is not None
+            # Validate all requested targets before the first device effect.
+            if execute:
+                stage = 'configuration'
+                if visual_requested and not self.config.get('KEVIN_LED_ADDRESS', '').strip():
+                    raise ShowError('requested LED is not configured')
+                if radio_requested and self.config.get('KEVIN_RADIO_DEVICE') != 'CRF-35B':
+                    raise ShowError('requested radio is not configured')
+            if visual_requested:
+                visual_change = any(previous[k] != recipe[k] for k in ('preset', 'snow', 'sky'))
+                stage = 'rendering'
+                self._update(cancel, status=stage, message='장면 그리는 중이야.')
+                if scene is None or visual_change:
+                    scene = self.renderer(recipe)
+                elif recipe['speed'] != previous['speed']:
+                    # Keep manually edited pixels when only changing playback speed.
+                    scene['duration'] = max(40, min(5000, round(
+                        scene['duration'] * previous['speed'] / recipe['speed'] / 10) * 10))
+                scene = pixels.validate(scene)
             if not execute:
+                with self.lock:
+                    self._update(cancel)
+                    self.preview_recipe, self.preview_scene = copy.deepcopy(recipe), copy.deepcopy(scene)
+                    self._commit_scene(cancel, recipe, scene)
                 self._update(cancel, status='preview', message=(plan['explanation'] or '이렇게 하면 돼.') + ' (미리보기)')
                 return
-            if self.applied_scene != scene:
+            if visual_requested and self.applied_scene != scene:
                 stage = 'sending'
                 with self.lock:
+                    self._update(cancel)
                     self.applied_scene = None
                 self._update(cancel, status=stage, message='전광판에 보내는 중!',
                              transport={'status': 'sending', 'physical_verified': False})
@@ -231,10 +271,14 @@ class ShowController:
                     raise ShowError('LED did not acknowledge transfer')
                 with self.lock:
                     self._update(cancel, transport=dict(result, physical_verified=False))
-                    self.applied_scene = copy.deepcopy(scene)
-            stage = 'audio'
-            self._update(cancel, status=stage, message='라디오 켤게.')
-            if recipe['music'] == 'play':
+            if visual_requested:
+                self._commit_applied(cancel, recipe, visual_fields, scene)
+                visual_applied = True
+            if radio_requested:
+                stage = 'audio'
+                self._update(cancel, status=stage, message='라디오 설정 바꿀게.')
+            if plan['music'] == 'play':
+                starting_music = True
                 self._prepare_audio(cancel)
                 check_cancel(cancel)
                 result = self.radio.play(recipe['volume'], cancel)
@@ -243,21 +287,33 @@ class ShowController:
             elif plan['music'] == 'stop':
                 check_cancel(cancel)
                 self._update(cancel, radio=self.radio.stop())
+            elif plan['volume'] is not None:
+                # Changing volume must not start a player, restart the track, or
+                # resume playback that the user paused outside this controller.
+                result = self.radio.set_volume(recipe['volume'], cancel)
+                check_cancel(cancel)
+                self._update(cancel, radio=dict(result, audible_verified=False))
+            if radio_requested:
+                self._commit_applied(cancel, recipe, ('music', 'volume'))
+            elif not visual_requested:
+                self._commit_applied(cancel, recipe, ())
             self._update(cancel, status='complete', message=plan['explanation'] or '됐어!')
         except Cancelled:
             return
         except Exception as error:
             # Never leak model URLs/tokens, BLE identifiers or platform exceptions.
-            if stage == 'audio' and not cancel.is_set():
+            if stage == 'audio' and starting_music and not cancel.is_set():
                 try:
                     self.radio.stop()
                 except Exception:
                     pass
             messages = {
                 'planning': '어, 지금 머리가 잘 안 돌아가. AI 연결을 한번 봐줄래?',
+                'configuration': '요청한 기기의 연결 설정이 없어. 기기를 연결한 뒤 다시 말해줘.',
                 'rendering': '그 장면은 못 그리겠어. 다르게 말해줄래?',
                 'sending': '전광판이 대답을 안 해. 전원이랑 블루투스 좀 봐줄래?',
-                'audio': '전광판은 바꿨는데 라디오가 안 잡혀. 소리 출력에 라디오 연결됐는지 봐줘.',
+                'audio': ('전광판은 바꿨는데 ' if visual_applied else '') +
+                         '라디오 설정을 못 바꿨어. 소리 출력에 라디오 연결됐는지 봐줘.',
             }
             if stage == 'planning' and self.config.get('KEVIN_PLANNER') == 'openai':
                 from openai_planner import OpenAIPlanError
@@ -313,6 +369,8 @@ class ShowController:
                 return {'status': 'stopping', 'job_id': self.state['job_id']}
             self.state.update(status='stopping', message='멈추는 중…')
             self.state['recipe']['music'] = 'stop'
+            self.applied_recipe['music'] = 'stop'
+            self.preview_recipe = self.preview_scene = None
             self.applied_scene = None
         try:
             radio = self.radio.stop()

@@ -6,3 +6,5 @@ __pycache__/
 .env
 work/
 .openai.env
+# Local review frame supplied by the owner's host; not part of the shipped app.
+docs/demo/review.html

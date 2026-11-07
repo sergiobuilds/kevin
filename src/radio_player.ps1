@@ -63,6 +63,15 @@ try {
                     $player.Play()
                     $result = Player-State
                 }
+                'volume' {
+                    $volume = [double]$request.volume
+                    if ([double]::IsNaN($volume) -or [double]::IsInfinity($volume) -or $volume -lt 0 -or $volume -gt 100) {
+                        throw 'Volume must be 0..100'
+                    }
+                    if ($null -ne $player) { $player.Volume = $volume / 100 }
+                    $result = Player-State
+                    $result.volume_applied = ($null -ne $player)
+                }
                 'stop' {
                     if ($null -ne $player) {
                         $player.Pause()

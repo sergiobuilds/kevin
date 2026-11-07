@@ -87,6 +87,62 @@ class IntentTests(unittest.TestCase):
                     show_intent.interpret(prompt, recipe)
                 call.assert_not_called()
 
+    def test_refusal_survives_supported_keywords_in_mixed_requests(self):
+        refusal = {**UPDATE, 'mode': 'unsupported', 'snow': 'keep',
+                   'explanation': 'TV는 지원하지 않습니다.'}
+        for prompt in ('TV를 켜고 캐럴도 틀어줘', 'TV랑 산타를 보여줘', '지원 안 되는 것도 전부 멈춰'):
+            with self.subTest(prompt=prompt), patch('urllib.request.urlopen', return_value=response(refusal)):
+                self.assertEqual(show_intent.interpret(prompt, {'music': 'stop'}), refusal)
+
+    def test_volume_only_never_becomes_play_even_when_model_drifted(self):
+        for music in ('keep', 'play', 'stop'):
+            model = {**UPDATE, 'snow': 'keep', 'volume': 30, 'music': music}
+            with self.subTest(music=music), patch('urllib.request.urlopen', return_value=response(model)):
+                result = show_intent.interpret('음악 볼륨만 30으로', {'music': 'stop', 'volume': 45})
+            self.assertEqual(result['music'], 'keep')
+            self.assertEqual(result['volume'], 30)
+            self.assertNotIn('캐럴 틀', result['explanation'])
+
+    def test_explicit_play_with_volume_still_plays(self):
+        model = {**UPDATE, 'snow': 'keep', 'music': 'keep', 'volume': 30}
+        with patch('urllib.request.urlopen', return_value=response(model)):
+            result = show_intent.interpret('캐럴 틀어줘 볼륨 30으로', {'music': 'stop'})
+        self.assertEqual((result['music'], result['volume']), ('play', 30))
+
+    def test_other_device_on_verbs_never_start_music(self):
+        cases = (
+            ('라디오 끄고 산타 켜줘', 'stop', None, 'stop'),
+            ('음악은 그대로 두고 산타 켜줘', 'keep', None, 'keep'),
+            ('음악 켜지 말고 볼륨만 30으로', 'keep', 30, 'keep'),
+            ('Stop the radio and turn Santa on', 'stop', None, 'stop'),
+            ('Leave music alone and turn Santa on', 'keep', None, 'keep'),
+            ("Don't turn music on, volume 30", 'keep', 30, 'keep'),
+            ('산타 켜고 라디오 꺼줘', 'stop', None, 'stop'),
+        )
+        for prompt, music, volume, expected in cases:
+            model = {**UPDATE, 'snow': 'keep', 'music': music, 'volume': volume}
+            with self.subTest(prompt=prompt), patch('urllib.request.urlopen', return_value=response(model)):
+                result = show_intent.interpret(prompt, {'music': 'stop', 'volume': 45})
+            self.assertEqual(result['music'], expected)
+            self.assertEqual(result['volume'], volume)
+            self.assertNotIn('캐럴 틀', result['explanation'])
+
+    def test_explicit_keep_and_negation_correct_music_model_drift(self):
+        for prompt in ('음악은 그대로 두고 산타 켜줘', '음악 켜지 말고 볼륨만 30으로',
+                       '음악 끄지 말고 산타 켜줘', '음악 안 켜고 볼륨만 30으로',
+                       "Don't start the music, volume 30"):
+            model = {**UPDATE, 'snow': 'keep', 'music': 'play', 'volume': 30}
+            with self.subTest(prompt=prompt), patch('urllib.request.urlopen', return_value=response(model)):
+                result = show_intent.interpret(prompt, {'music': 'stop', 'volume': 45})
+            self.assertEqual(result['music'], 'keep')
+
+    def test_ambiguous_music_words_preserve_validated_model_choice(self):
+        for music in ('keep', 'play', 'stop'):
+            model = {**UPDATE, 'snow': 'keep', 'music': music}
+            with self.subTest(music=music), patch('urllib.request.urlopen', return_value=response(model)):
+                result = show_intent.interpret('라디오도 부탁해 산타 켜줘', {'music': 'stop'})
+            self.assertEqual(result['music'], music)
+
     def test_errors_never_become_a_keyword_fallback(self):
         errors = [TimeoutError("private"), urllib.error.URLError("private"), urllib.error.HTTPError("private", 500, "private", {}, io.BytesIO(b"private"))]
         for error in errors:
